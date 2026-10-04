@@ -1,16 +1,17 @@
 {
-  "name": "@eko24ive/pi-ask",
-  "version": "1.2.0",
+  "name": "@jopqior/pi-ask",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.34.6",
   "description": "Pi package that adds an interactive ask_user clarification tool.",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eko24ive/pi-ask.git"
+    "url": "git+https://github.com/Jopqior/pi-ask.git"
   },
-  "homepage": "https://github.com/eko24ive/pi-ask#readme",
+  "homepage": "https://github.com/Jopqior/pi-ask#readme",
   "bugs": {
-    "url": "https://github.com/eko24ive/pi-ask/issues"
+    "url": "https://github.com/Jopqior/pi-ask/issues"
   },
   "keywords": [
     "pi-package",
@@ -53,10 +54,12 @@
   },
   "publishConfig": {
     "access": "public",
+    "registry": "https://registry.npmjs.org",
     "provenance": true
   },
   "release": {
-    "repositoryUrl": "https://github.com/eko24ive/pi-ask.git",
+    "repositoryUrl": "https://github.com/Jopqior/pi-ask.git",
+    "tagFormat": "jopqior-v${version}",
     "branches": [
       "main"
     ],

@@ -1,0 +1,10 @@
+{
+  "packages": [
+    "..",
+    {
+      "source": "npm:@eko24ive/pi-ask",
+      "extensions": [],
+      "skills": []
+    }
+  ]
+}

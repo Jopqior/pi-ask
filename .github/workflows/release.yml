@@ -15,9 +15,18 @@ permissions:
   pull-requests: write
   id-token: write
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   release:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      ${{ github.repository == 'Jopqior/pi-ask'
+          && github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && github.event.workflow_run.head_repository.full_name == github.repository
+          && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -29,13 +38,11 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -47,6 +54,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Check release baseline
+        run: git rev-parse --verify refs/tags/jopqior-v1.0.0
 
       - name: Release
         env:

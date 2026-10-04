@@ -34,10 +34,10 @@ Optimize for:
 ## Tech stack
 
 - TypeScript
-- pnpm
+- pnpm `10.34.6`, pinned per project through `packageManager` and Corepack
 - Biome
-- pi extension APIs from `@mariozechner/pi-coding-agent`
-- TUI components from `@mariozechner/pi-tui`
+- pi extension APIs from `@earendil-works/pi-coding-agent`
+- TUI components from `@earendil-works/pi-tui`
 - TypeBox for tool schemas
 
 ## Commands
@@ -45,7 +45,8 @@ Optimize for:
 Use these project commands:
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm test
 pnpm typecheck
 pnpm format
@@ -55,7 +56,8 @@ pnpm check
 
 Notes:
 
-- `pnpm check` runs Biome write/check flow for this repo.
+- `pnpm check` is read-only; `pnpm format`, `pnpm lint`, and `pnpm fix` write changes.
+- For fork release bootstrap and publishing readiness, read `CONTRIBUTING.md` before publishing or changing release setup.
 - `pnpm test` runs the Node test runner against `tests/*.test.ts`.
 - the extension is intended to be loaded dynamically with:
 

@@ -1,15 +1,17 @@
 ![pi-ask main image](docs/media/pi-ask-main.png)
 
-# @eko24ive/pi-ask
+# @jopqior/pi-ask
 
-[![npm downloads](https://badgen.net/npm/dm/@eko24ive/pi-ask)](https://www.npmjs.com/package/@eko24ive/pi-ask)
-[![last commit](https://badgen.net/github/last-commit/eko24ive/pi-ask?v=4b6c81e)](https://github.com/eko24ive/pi-ask/commits/main)
-[![stars](https://badgen.net/github/stars/eko24ive/pi-ask)](https://github.com/eko24ive/pi-ask/stargazers)
+[![npm downloads](https://badgen.net/npm/dm/@jopqior/pi-ask)](https://www.npmjs.com/package/@jopqior/pi-ask)
+[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=82ca986)](https://github.com/Jopqior/pi-ask/commits/main)
+[![stars](https://badgen.net/github/stars/Jopqior/pi-ask)](https://github.com/Jopqior/pi-ask/stargazers)
 
 > [!IMPORTANT]
-> Contributions are welcome in chill mode: please open an issue and link your fork or branch instead of expecting rapid pull-request reviews.
+> For contributions to this fork, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-`@eko24ive/pi-ask` is an ask tool that cares about your answers.
+`@jopqior/pi-ask` is a fork of [@eko24ive/pi-ask](https://github.com/eko24ive/pi-ask), originally created by [@eko24ive](https://github.com/eko24ive). It retains the upstream [MIT license and attribution](LICENSE).
+
+It is an ask tool that cares about your answers.
 
 It lets an agent pause, ask structured questions in a terminal UI, and continue with normalized answers instead of guessing.
 
@@ -17,30 +19,32 @@ It lets an agent pause, ask structured questions in a terminal UI, and continue 
 
 High-quality video: [demo.mp4](https://github.com/user-attachments/assets/a8503ca9-afcb-4c31-9edc-353b985a0209)
 
-## Contributions: chill mode
+## Upstream contribution note: chill mode
 
-This open source project is something I care about, and it genuinely brings me joy to see it help people. That said, I cannot promise rapid reviews or a normal pull-request turnaround.
+The following is the upstream author's contribution note, preserved here for attribution. Fork contributions belong in [Jopqior/pi-ask](https://github.com/Jopqior/pi-ask/issues).
 
-If you have an idea, bug report, or change, please open an issue. If you already have code, link to your fork or branch with the changes. I will review it carefully when I have time, then either incorporate the forked changes or implement the idea myself.
-
-I value contributions and will do my best to credit the people who help, whether that means a shout-out, a co-authored commit, or another fitting form of attribution.
+> This open source project is something I care about, and it genuinely brings me joy to see it help people. That said, I cannot promise rapid reviews or a normal pull-request turnaround.
+>
+> If you have an idea, bug report, or change, please open an issue. If you already have code, link to your fork or branch with the changes. I will review it carefully when I have time, then either incorporate the forked changes or implement the idea myself.
+>
+> I value contributions and will do my best to credit the people who help, whether that means a shout-out, a co-authored commit, or another fitting form of attribution.
 
 ## Install
 
 ```bash
-pi install npm:@eko24ive/pi-ask
+pi install npm:@jopqior/pi-ask
 ```
 
 You can also install from git:
 
 ```bash
-pi install git:github.com/eko24ive/pi-ask
+pi install git:github.com/Jopqior/pi-ask
 ```
 
 Or try it without installing (load once for the current run):
 
 ```bash
-pi -e npm:@eko24ive/pi-ask
+pi -e npm:@jopqior/pi-ask
 ```
 
 ## Features
@@ -103,6 +107,8 @@ Capture free-form input inline without leaving the flow.
 ![Inline custom answer input for Type your own option](docs/media/feature-custom-answer-input.png)
 
 ## Default key bindings
+
+For compatibility, this fork keeps the `eko24ive-pi-ask.json` config paths and `@eko24ive/pi-ask:*` remote event names unchanged.
 
 Open ask settings with `?` during the ask flow, or with the `/ask-settings` command from pi.
 
@@ -249,8 +255,11 @@ pnpm dev ../test
 
 ### Install dependencies
 
+Use Corepack to select the project-only pnpm `10.34.6` pin from `package.json`'s `packageManager` field. This does not require changing your global pnpm version.
+
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 ```
 
 ### Install git hooks (contributors)
@@ -275,7 +284,7 @@ pnpm test
 
 This repo uses `lefthook`, Commitizen, conventional commitlint, and semantic-release.
 
-If you want local hooks, install them once after `pnpm install`:
+If you want local hooks, install them once after `pnpm install --frozen-lockfile`:
 
 ```bash
 pnpm exec lefthook install

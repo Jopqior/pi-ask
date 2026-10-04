@@ -1,3 +1,9 @@
+# 1.0.0 (@jopqior/pi-ask)
+
+Initial fork release, based on `@eko24ive/pi-ask` 1.2.0. Fork releases use `jopqior-v*` tags and an independent version sequence.
+
+# Upstream history
+
 # [1.2.0](https://github.com/eko24ive/pi-ask/compare/v1.1.0...v1.2.0) (2026-08-16)
 
 
