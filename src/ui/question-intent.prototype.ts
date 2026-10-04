@@ -1,4 +1,4 @@
-// THROWAWAY: compare A/B keyboard effort for per-question intent + unified Review.
+// THROWAWAY: number-select/stay and Enter-confirm/advance interaction.
 // No production imports, tool schema, model output, persistence, or configuration.
 import { pathToFileURL } from "node:url";
 import {
@@ -13,6 +13,7 @@ import {
 
 interface Question {
 	custom: string;
+	customSelected: boolean;
 	elaborate: boolean;
 	multi: boolean;
 	note: string;
@@ -55,6 +56,7 @@ function fixtures(scenario: number): Question[] {
 		...q,
 		selected: [],
 		custom: "",
+		customSelected: false,
 		note: "",
 		optionNotes: q.options.map(() => ""),
 		elaborate: false,
@@ -73,13 +75,16 @@ function fixtures(scenario: number): Question[] {
 		questions[0].optionNotes[1] = "未选择：担心费用，请比较。";
 	} else if (scenario === 3) {
 		questions[0].custom = "我还不了解部署的区别，请先解释。";
+		questions[0].customSelected = true;
 		questions[0].elaborate = true;
 	}
 	return questions;
 }
 
 function answered(q: Question): boolean {
-	return q.selected.length > 0 || q.custom.trim().length > 0;
+	return (
+		q.selected.length > 0 || (q.customSelected && q.custom.trim().length > 0)
+	);
 }
 function status(q: Question): string {
 	if (!answered(q)) {
@@ -92,7 +97,9 @@ function details(q: Question): string[] {
 		`Answer: ${q.selected.map((i) => q.options[i]).join(", ") || "(no selected options)"}`,
 	];
 	if (q.custom) {
-		lines.push(`Custom answer: ${q.custom}`);
+		lines.push(
+			`Custom answer [${q.customSelected ? "selected" : "NOT selected draft"}]: ${q.custom}`
+		);
 	}
 	if (q.note) {
 		lines.push(`Question note: ${q.note}`);
@@ -109,7 +116,6 @@ function details(q: Question): string[] {
 
 export class QuestionIntentPrototype implements Component, Focusable {
 	questions = fixtures(0);
-	variant: "A" | "B" = "A";
 	scenario = 0;
 	tab = 0;
 	option = 0;
@@ -128,7 +134,7 @@ export class QuestionIntentPrototype implements Component, Focusable {
 	constructor(height = () => 32, exit: () => void = () => undefined) {
 		this.height = height;
 		this.exit = exit;
-		this.input.onSubmit = () => this.saveEditor(true);
+		this.input.onSubmit = () => this.saveEditor();
 	}
 	get focused() {
 		return this.hasFocus;
@@ -155,12 +161,14 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		this.input.setValue(value);
 		this.input.focused = this.focused;
 	}
-	private saveEditor(submit: boolean) {
+	private saveEditor() {
 		const q = this.questions[this.tab];
 		const target = this.editing;
 		const value = this.input.getValue();
 		if (target === "custom") {
 			q.custom = value;
+			q.customSelected = value.trim().length > 0;
+			this.option = q.options.length;
 			if (!q.multi && value.trim()) {
 				q.selected = [];
 			}
@@ -172,15 +180,6 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		this.editing = undefined;
 		this.input.focused = false;
 		this.notice = "Saved; Elaborate unchanged.";
-		if (
-			submit &&
-			target === "custom" &&
-			value.trim() &&
-			this.variant === "A" &&
-			!q.multi
-		) {
-			this.moveTab(1);
-		}
 	}
 	private moveTab(delta: number) {
 		this.tab = (this.tab + delta + 4) % 4;
@@ -188,10 +187,21 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		this.scroll = 0;
 		this.follow = true;
 	}
+	private selectCustom(toggle: boolean) {
+		const q = this.questions[this.tab];
+		if (!q.custom.trim()) {
+			this.openEditor("custom");
+			return;
+		}
+		q.customSelected = toggle ? !q.customSelected : true;
+		if (!q.multi && q.customSelected) {
+			q.selected = [];
+		}
+	}
 	private select(index: number, toggle: boolean) {
 		const q = this.questions[this.tab];
 		if (index === q.options.length) {
-			this.openEditor("custom");
+			this.selectCustom(toggle);
 			return;
 		}
 		const selected = q.selected.includes(index);
@@ -202,11 +212,17 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		} else {
 			q.selected = toggle && selected ? [] : [index];
 			q.custom = "";
+			q.customSelected = false;
 		}
 	}
 	private cancel() {
 		const dirty = this.questions.some(
-			(q) => answered(q) || q.elaborate || q.note || q.optionNotes.some(Boolean)
+			(q) =>
+				answered(q) ||
+				q.custom ||
+				q.elaborate ||
+				q.note ||
+				q.optionNotes.some(Boolean)
 		);
 		if (dirty && !this.cancelPending) {
 			this.cancelPending = true;
@@ -232,16 +248,11 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		this.scroll = 0;
 	}
 
-	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Keep throwaway A/B controls together; not production architecture.
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Keep throwaway controls together; not production architecture.
 	// biome-ignore lint/complexity/noExcessiveLinesPerFunction: This isolated prototype is retained only as a decision artifact.
 	handleInput(data: string) {
 		if (matchesKey(data, "ctrl+c")) {
 			this.exit();
-			return;
-		}
-		if (matchesKey(data, "f2")) {
-			this.variant = this.variant === "A" ? "B" : "A";
-			this.notice = `Variant ${this.variant}; all answers, flags, notes and editor draft preserved.`;
 			return;
 		}
 		if (matchesKey(data, "f3")) {
@@ -263,7 +274,7 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		}
 		if (this.editing !== undefined) {
 			if (matchesKey(data, "escape")) {
-				this.saveEditor(false);
+				this.saveEditor();
 			} else {
 				this.input.handleInput(data);
 			}
@@ -318,6 +329,9 @@ export class QuestionIntentPrototype implements Component, Focusable {
 			this.option =
 				(this.option + (up ? -1 : 1) + q.options.length + 1) %
 				(q.options.length + 1);
+			if (this.option === q.options.length && !q.custom.trim()) {
+				this.openEditor("custom");
+			}
 			return;
 		}
 		if (matchesKey(data, "e")) {
@@ -334,12 +348,15 @@ export class QuestionIntentPrototype implements Component, Focusable {
 			return;
 		}
 		if (matchesKey(data, "c")) {
-			this.openEditor("custom");
+			if (this.option === q.options.length && q.custom.trim()) {
+				this.openEditor("custom");
+			}
 			return;
 		}
 		if (matchesKey(data, "backspace") || matchesKey(data, "delete")) {
 			q.selected = [];
 			q.custom = "";
+			q.customSelected = false;
 			this.notice = "Answer cleared. Notes and Elaborate preserved.";
 			return;
 		}
@@ -351,18 +368,18 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		if (digit >= 0) {
 			this.option = digit;
 			this.select(digit, q.multi);
-			if (!q.multi && this.variant === "A" && this.editing === undefined) {
-				this.moveTab(1);
-			}
 		} else if (matchesKey(data, "space")) {
 			this.select(this.option, true);
 		} else if (matchesKey(data, "enter")) {
-			if (this.variant === "B") {
-				this.moveTab(1);
-				return;
-			}
 			if (this.option === q.options.length) {
-				this.openEditor("custom");
+				if (q.custom.trim()) {
+					if (!q.multi) {
+						this.select(this.option, false);
+					}
+					this.moveTab(1);
+				} else {
+					this.openEditor("custom");
+				}
 			} else {
 				if (!q.multi) {
 					this.select(this.option, false);
@@ -377,9 +394,7 @@ export class QuestionIntentPrototype implements Component, Focusable {
 	render(width: number): string[] {
 		const wrap = (text: string) => wrapTextWithAnsi(text, Math.max(1, width));
 		const header = [
-			...wrap(
-				`THROWAWAY intent + Review | ${this.variant}: ${this.variant === "A" ? "single number auto-next" : "number selects & stays"}`
-			),
+			...wrap("THROWAWAY | numbers select/stay; Enter confirms/next"),
 			...wrap(`Fixture ${this.scenario + 1}: ${scenarios[this.scenario]}`),
 			...wrap(
 				this.result
@@ -414,12 +429,12 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		} else {
 			const q = this.questions[this.tab];
 			add(`${q.title} (${q.multi ? "multi" : "single"})`);
-			q.options.concat("Custom answer (edit)").forEach((label, i) => {
+			q.options.concat("Custom answer").forEach((label, i) => {
 				if (i === this.option) {
 					anchor = body.length;
 				}
 				add(
-					`${i === this.option ? ">" : " "} ${i + 1}. [${q.selected.includes(i) || (i === q.options.length && q.custom.trim()) ? "x" : " "}] ${label}`
+					`${i === this.option ? ">" : " "} ${i + 1}. [${q.selected.includes(i) || (i === q.options.length && q.customSelected && q.custom.trim()) ? "x" : " "}] ${label}`
 				);
 			});
 			if (q.previews && this.option < q.options.length) {
@@ -429,16 +444,12 @@ export class QuestionIntentPrototype implements Component, Focusable {
 		}
 		const footer: string[] = [];
 		footer.push(...wrap(this.notice));
-		footer.push(
-			...wrap(
-				"F2 switch A/B (keep state) | F3 NEXT FIXTURE: RESETS ALL | Ctrl+C exit"
-			)
-		);
+		footer.push(...wrap("F3 NEXT FIXTURE: RESETS ALL | Ctrl+C exit"));
 		if (!this.result) {
 			if (this.editing !== undefined) {
 				footer.push(
 					...wrap(
-						`Editing ${typeof this.editing === "number" ? `option note: ${this.questions[this.tab].options[this.editing]}` : this.editing} | Enter save${this.editing === "custom" && this.variant === "A" && !this.questions[this.tab].multi ? "+next if nonblank" : "+stay"}; Esc save+close. e types text.`
+						`Editing ${typeof this.editing === "number" ? `option note: ${this.questions[this.tab].options[this.editing]}` : this.editing} | Enter save+stay; Esc save+close. e types text.`
 					)
 				);
 			} else if (this.tab === 3) {
@@ -449,19 +460,18 @@ export class QuestionIntentPrototype implements Component, Focusable {
 				);
 			} else {
 				const q = this.questions[this.tab];
-				let selectionHint =
-					this.variant === "A" ? "select/next" : "select/stay";
-				if (q.multi) {
-					selectionHint = "toggle/stay";
+				const selectionHint = q.multi ? "toggle/stay" : "select/stay";
+				if (this.option === q.options.length && q.custom.trim()) {
+					footer.push(...wrap("c edit saved custom answer (this row only)"));
 				}
 				footer.push(
 					...wrap(
-						`Up/Down highlight | 1-${q.options.length + 1} ${selectionHint} | Space toggle/stay | Enter ${this.variant === "B" || q.multi ? "next (keep answer)" : "select/next"}`
+						`Up/Down highlight | 1-${q.options.length + 1} ${selectionHint} | Space toggle/stay | Enter ${q.multi ? "next (keep answer)" : "select/next"}`
 					)
 				);
 				footer.push(
 					...wrap(
-						"e Elaborate toggle/stay | c custom | n option note | Shift+N question note | Backspace clear answer | Tab/Right next; Shift+Tab/Left back | Esc cancel"
+						"e Elaborate toggle/stay | n option note | Shift+N question note | Backspace clear answer | Tab/Right next; Shift+Tab/Left back | Esc cancel"
 					)
 				);
 			}
