@@ -42,7 +42,8 @@
     "fix": "ultracite fix",
     "commit": "cz",
     "commitlint": "commitlint",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "prototype:intent": "node src/ui/question-intent.prototype.ts"
   },
   "pi": {
     "extensions": [
