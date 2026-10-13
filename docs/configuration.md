@@ -22,7 +22,7 @@ Older pi-ask versions wrote this file at `~/.pi/agent/eko24ive-pi-ask.json`. If 
 
 ## Config versions and migrations
 
-`schemaVersion` identifies the persisted config shape. pi-ask migrates older supported schema versions forward in memory before validation. Migrations preserve existing user-provided values and add new fields from defaults when needed, but loading a config does not rewrite the file.
+`schemaVersion` identifies the persisted config shape; the current version is `6`. Versions `1`–`5` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section. Loading never rewrites the file; an explicit save writes version `6` without that section.
 
 Unsupported future versions or invalid files are left unchanged and defaults are loaded for the current session. Fix the file, then run `/reload` or restart pi.
 
@@ -30,16 +30,7 @@ Unsupported future versions or invalid files are left unchanged and defaults are
 
 ```json
 {
-  "schemaVersion": 5,
-  "answer": {
-    "extractionModels": [
-      { "provider": "openai-codex", "id": "<model-id>" },
-      { "provider": "github-copilot", "id": "<model-id>" },
-      { "provider": "anthropic", "id": "<model-id>" }
-    ],
-    "extractionTimeoutMs": 30000,
-    "extractionRetries": 1
-  },
+  "schemaVersion": 6,
   "behaviour": {
     "autoSubmitWhenAnsweredWithoutNotes": false,
     "confirmDismissWhenDirty": true,
@@ -91,34 +82,6 @@ Unsupported future versions or invalid files are left unchanged and defaults are
 }
 ```
 
-## Answer extraction
-
-These settings affect only the `/answer` command. Normal `ask_user` tool calls do not use an extraction model.
-
-### `answer.extractionModels`
-
-- type: array of `{ "provider": string, "id": string }`
-- default: lightweight OpenAI Codex, GitHub Copilot, and Anthropic models
-- effect: `/answer` tries configured models in order and uses the first model with available auth that is inside the current session model scope; an empty scope allows all available models
-- fallback: if no configured model is usable, `/answer` tries the current chat model after validating its auth and scope
-- auth check: use Pi's auth preflight before changing this list:
-
-```bash
-pi auth check --provider openai-codex --model gpt-5.4-mini
-```
-
-### `answer.extractionTimeoutMs`
-
-- type: positive number
-- default: `30000`
-- effect: per-attempt extraction timeout in milliseconds
-
-### `answer.extractionRetries`
-
-- type: integer from `0` to `3`
-- default: `1`
-- effect: number of retry attempts after the model omits `ask_user`, returns invalid tool arguments, or produces an invalid JSON text fallback; retries include the previous error and response as feedback
-
 ## Behaviour
 
 ### `behaviour.autoSubmitWhenAnsweredWithoutNotes`
@@ -148,7 +111,7 @@ pi auth check --provider openai-codex --model gpt-5.4-mini
 - default: `false`
 - effect: future ask flows render requested `single` questions as `multi` questions
 - result: the question keeps `type: "single"` and adds `presentedType: "multi"`; result text uses one compact note when any answered questions were presented differently
-- scope: this is a default presentation policy for new/replayed ask flows; it is not hot-applied to the current ask flow
+- scope: this is a default presentation policy for new/recovered ask flows; it is not hot-applied to the current ask flow
 - current-flow override: use the configurable main-flow `changeQuestionType` hotkey (default `t`) to change the active question type live: non-preview questions toggle `single <-> multi`; preview questions toggle `preview <-> multi`
 - destructive confirmation: changing `multi -> single` with multiple selected answers requires pressing the type hotkey again; the pending confirmation has no timeout and clears when another navigation/action is used
 
@@ -309,7 +272,7 @@ These are intentionally not configurable:
 
 If configured keymaps are invalid:
 
-- valid `behaviour`, `notifications`, and `answer` settings still load
+- valid `behaviour` and `notifications` settings still load
 - invalid `keymaps` fall back to default keymaps for the current session
 - ask remains usable
 - a warning notice is shown
@@ -327,14 +290,7 @@ Invalid keymaps include:
 
 ```json
 {
-  "schemaVersion": 5,
-  "answer": {
-    "extractionRetries": 1,
-    "extractionTimeoutMs": 30000,
-    "extractionModels": [
-      { "provider": "openai-codex", "id": "<model-id>" }
-    ]
-  },
+  "schemaVersion": 6,
   "behaviour": {
     "autoSubmitWhenAnsweredWithoutNotes": true,
     "confirmDismissWhenDirty": true,
@@ -399,9 +355,7 @@ Invalid keymaps include:
 When editing this config for a user:
 
 - preserve unrelated fields
-- keep `schemaVersion` at `5`
-- preserve `answer.extractionModels` as explicit provider/id pairs
-- keep `answer.extractionRetries` between `0` and `3`
+- set `schemaVersion` to `6` and remove the obsolete `answer` section when saving an older config
 - do not assign fixed numeric shortcuts (`1` through `9`) to configurable actions
 - do not create duplicate bindings within a context or between `global` and `main`, `editor`, or `noteEditor`
 - preserve existing `notifications.channels` unless the user asks to change notification targets

@@ -71,7 +71,7 @@ test("registers /ask-settings and opens the shared settings overlay", async () =
 	assert(text.includes("Edit this config file to customize"));
 	assert(text.includes("keymaps"));
 	assert(text.includes("notifications"));
-	assert(text.includes("extraction settings"));
+	assert(!text.includes("extraction settings"));
 
 	delete process.env.PI_CODING_AGENT_DIR;
 	await rm(agentDir, { force: true, recursive: true });

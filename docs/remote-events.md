@@ -25,7 +25,7 @@ type PiAskStartedEvent = {
   version: 1;
   flowId: string;
   toolCallId?: string;
-  source: "tool" | "answer" | "answer:again" | "ask:replay" | "ask:resume";
+  source: "tool" | "ask:resume";
   title?: string;
   questions: AskQuestion[];
   createdAt: number;
@@ -111,7 +111,7 @@ type PiAskCompletedEvent = {
   version: 1;
   flowId: string;
   toolCallId?: string;
-  source: "tool" | "answer" | "answer:again" | "ask:replay" | "ask:resume";
+  source: "tool" | "ask:resume";
   result: AskResult;
   completedAt: number;
 };

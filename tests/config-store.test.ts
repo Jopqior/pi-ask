@@ -20,8 +20,7 @@ function expectedConfigFile(
 	overrides: { behaviour?: typeof DEFAULT_ASK_CONFIG.behaviour } = {}
 ) {
 	return {
-		schemaVersion: 5,
-		answer: DEFAULT_ASK_CONFIG.answer,
+		schemaVersion: 6,
 		behaviour: overrides.behaviour ?? DEFAULT_ASK_CONFIG.behaviour,
 		keymaps: DEFAULT_ASK_CONFIG.keymaps,
 		notifications: DEFAULT_ASK_CONFIG.notifications,
@@ -161,33 +160,54 @@ test("config store leaves broken json unchanged and loads defaults", async () =>
 	await rm(dirname(path), { force: true, recursive: true });
 });
 
-test("config store loads migrated config without rewriting", async () => {
+test("config store loads migrated config without rewriting and saves without answer", async () => {
 	const path = await makeTempPath("pi-ask-config-current-");
 	await mkdir(dirname(path), { recursive: true });
+	const behaviour = {
+		autoSubmitWhenAnsweredWithoutNotes: true,
+		confirmDismissWhenDirty: false,
+		doublePressReviewShortcuts: false,
+		presentSingleAsMulti: true,
+		showFooterHints: false,
+	};
+	const keymaps = {
+		...DEFAULT_ASK_CONFIG.keymaps,
+		main: { ...DEFAULT_ASK_CONFIG.keymaps.main, confirm: ["ctrl+k"] },
+	};
+	const notifications = {
+		channels: ["osc9", { type: "command", command: "cmux notify" }],
+		enabled: false,
+	};
 	const content = JSON.stringify({
-		schemaVersion: 1,
-		behaviour: {
-			autoSubmitWhenAnsweredWithoutNotes: true,
-			confirmDismissWhenDirty: true,
-			doublePressReviewShortcuts: true,
-			showFooterHints: false,
+		schemaVersion: 5,
+		answer: {
+			extractionModels: [{ provider: "anthropic", id: "claude-haiku-4-5" }],
+			extractionRetries: 3,
+			extractionTimeoutMs: 1000,
 		},
-		keymaps: DEFAULT_ASK_CONFIG.keymaps,
+		behaviour,
+		keymaps,
+		notifications,
 	});
 	await writeFile(path, content);
 	const store = new AskConfigStore(path);
 
 	const result = await store.ensureLoaded();
 
-	assert.equal(
-		result.config.behaviour.autoSubmitWhenAnsweredWithoutNotes,
-		true
-	);
-	assert.equal(result.config.behaviour.confirmDismissWhenDirty, true);
-	assert.equal(result.config.behaviour.doublePressReviewShortcuts, true);
-	assert.equal(result.config.behaviour.showFooterHints, false);
-	assert.deepEqual(result.config.keymaps, DEFAULT_ASK_CONFIG.keymaps);
+	assert.equal(result.notice, undefined);
+	assert.equal("answer" in result.config, false);
+	assert.deepEqual(result.config, { behaviour, keymaps, notifications });
 	assert.equal(await readFile(path, "utf-8"), content);
+
+	await store.save(result.config);
+	const saved = JSON.parse(await readFile(path, "utf-8"));
+	assert.equal("answer" in saved, false);
+	assert.deepEqual(saved, {
+		schemaVersion: 6,
+		behaviour,
+		keymaps,
+		notifications,
+	});
 	await rm(dirname(path), { force: true, recursive: true });
 });
 

@@ -3,7 +3,7 @@
 # @jopqior/pi-ask
 
 [![npm downloads](https://badgen.net/npm/dm/@jopqior/pi-ask)](https://www.npmjs.com/package/@jopqior/pi-ask)
-[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=82ca986)](https://github.com/Jopqior/pi-ask/commits/main)
+[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=bbe41e766bb39f5e21f7cf18505fcf6e653a389c)](https://github.com/Jopqior/pi-ask/commits/main)
 [![stars](https://badgen.net/github/stars/Jopqior/pi-ask)](https://github.com/Jopqior/pi-ask/stargazers)
 
 > [!IMPORTANT]
@@ -59,12 +59,8 @@ Once installed, this package gives the agent a native way to ask for clarificati
 - 👀 Review tab with `Submit`, `Elaborate`, and `Cancel`
 - 💬 Elaboration flow to capture note-based clarification before final submission
 - ⌨️ Context-aware customizable keymaps with aliases for main flow, editors, and settings
-- ⚙️ Ask settings with persisted behaviour, notifications, keymaps, and `/answer` extraction config
+- ⚙️ Ask settings with persisted behaviour, notifications, and keymaps
 - 🔔 Optional external notifications when an ask flow is waiting for input
-- 🔁 Slash commands for fallback/replay:
-  - `/answer` extracts questions from the latest assistant message into an ask flow
-  - `/answer:again` reopens the latest `/answer` form on the current branch
-  - `/ask:replay` replays the latest real `ask_user` form on the current branch
 - 🛟 Automatic recovery of an unanswered `ask_user` form after startup, resume, or fork
 - 🗣️ You can talk to your agent to configure pi-ask; it will read the bundled configuration guide and tailor the config for you
 
@@ -136,20 +132,9 @@ Review-tab shortcuts can optionally require the same number key twice via `behav
 
 You can edit the config file yourself, ask pi to edit it for you, or use `/ask-settings` to find the exact config path, toggle behaviour/notification settings, or reset config to defaults with a guarded double press. pi-ask treats the config file as user-owned: load-time migrations and invalid files are handled in memory without rewriting or backing up the file, and read-only/externally managed configs fail gracefully with a manual-edit message.
 
-`/answer` keeps extraction within the current session model scope. Check a configured model before use with `pi auth check --provider <provider> --model <id>`.
-
 ```json
 {
-  "schemaVersion": 5,
-  "answer": {
-    "extractionModels": [
-      { "provider": "openai-codex", "id": "gpt-5.4-mini" },
-      { "provider": "github-copilot", "id": "gpt-5.4-mini" },
-      { "provider": "anthropic", "id": "claude-haiku-4-5" }
-    ],
-    "extractionTimeoutMs": 30000,
-    "extractionRetries": 1
-  },
+  "schemaVersion": 6,
   "behaviour": {
     "autoSubmitWhenAnsweredWithoutNotes": false,
     "confirmDismissWhenDirty": true,
@@ -205,30 +190,17 @@ Accepted notation follows pi-tui key ids. Common aliases are normalized, for exa
 
 ## Use
 
-After installation, the extension registers the `ask_user` tool plus `/ask-settings`, `/answer`, `/answer:again`, and `/ask:replay` commands.
+After installation, the extension registers the `ask_user` tool and `/ask-settings` command.
 
-Agents can auto-discover and call `ask_user` when they need clarification instead of guessing. They can mark any number of grounded preferences with `recommended: true` and use option descriptions for reasons. In interactive sessions, it opens a terminal UI flow for structured answers, supports native pi-style `@` file references while typing answers or notes, and returns normalized answers back to the agent. Ask settings are available both from `?` in the ask flow and from the `/ask-settings` command. Behaviour and notification settings are binary `on`/`off` toggles that save immediately when the config file is writable; save failures revert the toggle and show a manual-edit message. The settings overlay includes a guarded double-press reset-to-defaults action; keymaps, notification channels, and extraction settings are changed by editing the shown config file path.
-
-### Answer and replay commands
-
-`/answer` is useful when the agent asked questions in plain text instead of using `ask_user`. It extracts questions from the latest completed assistant message and opens the same ask UI.
-
-Replay commands are branch-aware. They read persisted entries from the current pi session branch, so they work naturally with `/resume`, `/tree`, and conversation branching:
-
-- `/answer:again` reopens the latest form created by `/answer` on this branch
-- `/ask:replay` reopens the latest real `ask_user` form on this branch
-
-Cancellation is local to the UI: closing a replayed form does not start a new agent turn. Submitted answers are sent back as a normal user follow-up message.
+Agents can auto-discover and call `ask_user` when they need clarification instead of guessing. They can mark any number of grounded preferences with `recommended: true` and use option descriptions for reasons. In interactive sessions, it opens a terminal UI flow for structured answers, supports native pi-style `@` file references while typing answers or notes, and returns normalized answers back to the agent. Ask settings are available both from `?` in the ask flow and from the `/ask-settings` command. Behaviour and notification settings are binary `on`/`off` toggles that save immediately when the config file is writable; save failures revert the toggle and show a manual-edit message. The settings overlay includes a guarded double-press reset-to-defaults action; keymaps and notification channels are changed by editing the shown config file path.
 
 ### Interrupted ask forms
 
-If Pi stops while an `ask_user` form is open, the tool call remains without a result. Starting, resuming, or forking that session reopens the newest unanswered form once. Submitting sends the result as a user message because the original tool execution no longer exists. Cancelling dismisses the automatic recovery. Either outcome prevents another automatic reopen, while `/ask:replay` remains available.
+If Pi stops while an `ask_user` form is open, the tool call remains without a result. Starting, resuming, or forking that session reopens the newest unresolved form on the active branch. Submitting or elaborating sends the result as a user message because the original tool execution no longer exists. Cancelling dismisses recovery without sending a message to the agent. Either outcome marks that call dismissed and prevents it from automatically reopening again.
 
 New sessions and extension reloads do not trigger recovery.
 
-Kudos to [@k0valik](https://github.com/k0valik) for the `/answer` idea.
-
-You can also talk to pi to configure this extension. When asked to customize pi-ask settings, keymaps, notifications, or extraction behavior, the agent is instructed to read the bundled `docs/configuration.md` guide first and then edit the config file accordingly.
+You can also talk to pi to configure this extension. When asked to customize pi-ask settings, keymaps, or notifications, the agent is instructed to read the bundled `docs/configuration.md` guide first and then edit the config file accordingly.
 
 This package also bundles the `ask-user` skill profile from `skills/ask-user/SKILL.md`. It reinforces when to use the tool, is enabled by default when installed, and can be disabled via `pi config`. The skill was inspired by https://github.com/edlsh/pi-ask-user.
 

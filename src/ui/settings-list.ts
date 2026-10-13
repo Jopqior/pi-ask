@@ -97,7 +97,7 @@ const SETTINGS = [
 	},
 	{
 		description:
-			"Default new and replayed ask flows to render single-select questions as multi-select. This is not hot-applied to the current flow; use the type hotkey there.",
+			"Default new and recovered ask flows to render single-select questions as multi-select. This is not hot-applied to the current flow; use the type hotkey there.",
 		key: "presentSingleAsMulti",
 		section: "Defaults for future asks",
 		label: "Present single-select as multi-select",
@@ -105,7 +105,7 @@ const SETTINGS = [
 	},
 	{
 		description:
-			"Reset behaviour, keymaps, notifications, and extraction settings to defaults. Press twice quickly to confirm.",
+			"Reset behaviour, keymaps, and notifications to defaults. Press twice quickly to confirm.",
 		key: "resetConfig",
 		section: "Actions",
 		label: "Reset config to defaults",
@@ -172,7 +172,7 @@ export class AskSettingsList {
 			lines,
 			this.theme.fg(
 				"muted",
-				"Edit this config file to customize keymaps, notifications, and extraction settings:"
+				"Edit this config file to customize keymaps and notifications:"
 			),
 			innerWidth
 		);

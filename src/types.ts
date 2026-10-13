@@ -2,7 +2,6 @@ export type AskQuestionType = "single" | "multi" | "preview";
 
 export interface AskOption {
 	description?: string;
-	freeform?: boolean;
 	label: string;
 	preview?: string;
 	recommended?: boolean;
@@ -153,7 +152,6 @@ export interface AskState {
 
 export interface AskDisplayOption extends AskOption {
 	isCustomOption?: boolean;
-	isFreeformOnlyOption?: boolean;
 }
 
 export type AskAction =

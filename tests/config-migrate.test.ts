@@ -6,6 +6,12 @@ import { CURRENT_ASK_CONFIG_SCHEMA_VERSION } from "../src/config/migrations/inde
 
 const INVALID_CONFIG_PATTERN = /Config was invalid or unsupported/;
 
+const legacyAnswerConfig = {
+	extractionModels: [{ provider: "anthropic", id: "claude-haiku-4-5" }],
+	extractionRetries: 3,
+	extractionTimeoutMs: 1000,
+};
+
 const currentConfigFile = {
 	schemaVersion: CURRENT_ASK_CONFIG_SCHEMA_VERSION,
 	behaviour: DEFAULT_ASK_CONFIG.behaviour,
@@ -28,12 +34,14 @@ test("config migration maps previous-version config files into current shape", (
 		questionNote: "shift+x",
 		toggle: "ctrl+t",
 	};
+	const behaviour = { ...DEFAULT_ASK_CONFIG.behaviour, showFooterHints: false };
+	const notifications = { channels: ["osc777"], enabled: false };
 	const cases = [
 		{
 			name: "v1",
 			raw: {
 				schemaVersion: 1,
-				behaviour: DEFAULT_ASK_CONFIG.behaviour,
+				behaviour,
 				keymaps: legacyKeymaps,
 			},
 		},
@@ -41,8 +49,8 @@ test("config migration maps previous-version config files into current shape", (
 			name: "v2",
 			raw: {
 				schemaVersion: 2,
-				answer: DEFAULT_ASK_CONFIG.answer,
-				behaviour: DEFAULT_ASK_CONFIG.behaviour,
+				answer: legacyAnswerConfig,
+				behaviour,
 				keymaps: legacyKeymaps,
 			},
 		},
@@ -50,10 +58,10 @@ test("config migration maps previous-version config files into current shape", (
 			name: "v3",
 			raw: {
 				schemaVersion: 3,
-				answer: DEFAULT_ASK_CONFIG.answer,
-				behaviour: DEFAULT_ASK_CONFIG.behaviour,
+				answer: legacyAnswerConfig,
+				behaviour,
 				keymaps: legacyKeymaps,
-				notifications: DEFAULT_ASK_CONFIG.notifications,
+				notifications,
 			},
 		},
 	];
@@ -61,6 +69,13 @@ test("config migration maps previous-version config files into current shape", (
 	for (const { name, raw } of cases) {
 		const result = migrateAskConfig(raw);
 		assert.equal(result.migrated, true, name);
+		assert.equal("answer" in result.config, false, name);
+		assert.deepEqual(result.config.behaviour, behaviour, name);
+		assert.deepEqual(
+			result.config.notifications,
+			name === "v3" ? notifications : DEFAULT_ASK_CONFIG.notifications,
+			name
+		);
 		assert.deepEqual(result.config.keymaps.global.dismiss, ["ctrl+d"], name);
 		assert.deepEqual(result.config.keymaps.main.cancel, ["q"], name);
 		assert.deepEqual(result.config.keymaps.main.confirm, ["ctrl+k"], name);
@@ -77,32 +92,63 @@ test("config migration maps previous-version config files into current shape", (
 	}
 });
 
-test("config migration adds v5 defaults to v4 configs", () => {
-	const v4MainKeymaps = Object.fromEntries(
-		Object.entries(DEFAULT_ASK_CONFIG.keymaps.main).filter(
-			([key]) => key !== "changeQuestionType"
-		)
-	);
-	const result = migrateAskConfig({
-		schemaVersion: 4,
-		answer: DEFAULT_ASK_CONFIG.answer,
-		behaviour: {
+test("config migration preserves v4 and v5 settings and drops obsolete answer config", () => {
+	for (const schemaVersion of [4, 5]) {
+		const behaviour = {
 			autoSubmitWhenAnsweredWithoutNotes: true,
-			confirmDismissWhenDirty: true,
-			doublePressReviewShortcuts: true,
+			confirmDismissWhenDirty: false,
+			doublePressReviewShortcuts: false,
 			showFooterHints: false,
-		},
-		keymaps: {
+		};
+		const main = {
+			...DEFAULT_ASK_CONFIG.keymaps.main,
+			changeQuestionType: ["ctrl+y"],
+			confirm: ["ctrl+k"],
+		};
+		const keymaps = {
 			...DEFAULT_ASK_CONFIG.keymaps,
-			main: v4MainKeymaps,
-		},
-		notifications: DEFAULT_ASK_CONFIG.notifications,
-	});
+			main:
+				schemaVersion === 4
+					? Object.fromEntries(
+							Object.entries(main).filter(
+								([key]) => key !== "changeQuestionType"
+							)
+						)
+					: main,
+		};
+		const notifications = {
+			channels: ["osc9", { type: "command", command: "cmux notify" }],
+			enabled: false,
+		};
+		const raw = {
+			schemaVersion,
+			answer: legacyAnswerConfig,
+			behaviour:
+				schemaVersion === 4
+					? behaviour
+					: { ...behaviour, presentSingleAsMulti: true },
+			keymaps,
+			notifications,
+		};
+		const result = migrateAskConfig(raw);
 
-	assert.equal(result.migrated, true);
-	assert.equal(result.config.behaviour.presentSingleAsMulti, false);
-	assert.equal(result.config.behaviour.showFooterHints, false);
-	assert.deepEqual(result.config.keymaps.main.changeQuestionType, ["t"]);
+		assert.equal(result.migrated, true);
+		assert.equal("answer" in result.config, false);
+		assert.deepEqual(result.config.behaviour, {
+			...behaviour,
+			presentSingleAsMulti: schemaVersion === 5,
+		});
+		assert.deepEqual(result.config.keymaps, {
+			...keymaps,
+			main: {
+				...main,
+				changeQuestionType: schemaVersion === 4 ? ["t"] : ["ctrl+y"],
+			},
+		});
+		assert.deepEqual(result.config.notifications, notifications);
+		assert.equal("answer" in raw, true);
+		assert.equal(raw.schemaVersion, schemaVersion);
+	}
 });
 
 test("config migration maps legacy flat keymaps into context keymaps", () => {

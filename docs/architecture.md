@@ -15,9 +15,8 @@ The codebase is split so the implementation reads through file boundaries and na
 
 - `src/index.ts` — extension entrypoint
 - `src/ask-tool.ts` — tool registration, non-interactive fallback, transcript rendering, ask payload capture
-- `src/answer-commands.ts` — `/answer`, `/answer:again`, and `/ask:replay` command wiring
-- `src/answer-extraction.ts` — configured, session-scope-aware extraction model selection, synthetic `ask_user` tool-call extraction, and tolerant text fallback
-- `src/ask-payload-store.ts` — branch-aware persisted ask payload lookup
+- `src/ask-settings-command.ts` — `/ask-settings` command wiring
+- `src/ask-payload-store.ts` — tool-only payload capture and active-branch recovery lookup
 - `src/pending-ask.ts` — active-branch unresolved tool-call detection and recovery dismissal persistence
 - `src/resume-pending-ask.ts` — detached lifecycle wiring and recovered answer delivery
 - `src/notifications.ts` — best-effort ask notification payload rendering and channel execution
@@ -78,12 +77,12 @@ The codebase is split so the implementation reads through file boundaries and na
 - only selected option notes are emitted in the final result
 - editor lifecycle stays in the controller, not in the reducers
 - persisted ask settings are migrated to the current schema version in memory, validated, and normalized before use without rewriting the config file on load
-- config schema migrations preserve user-provided values and add new defaults only when fields are absent
-- replay payload lookup scans only the current session branch and revalidates payloads before use
+- config schema versions 1–5 migrate to version 6 in memory, preserving other settings and adding missing defaults while discarding the obsolete `answer` section; explicit saves write version 6
+- payload capture persists `ask:payload` entries with source `tool` only; recovery lookup scans only the current branch, revalidates payloads, and ignores obsolete non-tool entries
 - interrupted-ask recovery selects only the newest unresolved `ask_user` call on the active branch, prefers its valid persisted payload, and validates original arguments as fallback
 - recovered forms open only for TUI `startup`, `resume`, and `fork` events; the flow stays detached from the lifecycle handler
-- recovered submit and cancel both persist dismissal before the same call can reopen; manual `/ask:replay` ignores that recovery marker
-- invalid persisted keymaps fall back to default keymaps for the current session without discarding valid behaviour, notification, or answer settings
+- recovered submit, elaborate, and cancel persist dismissal before the same call can reopen; submit/elaborate deliver a user message, while cancel sends no message to the agent
+- invalid persisted keymaps fall back to default keymaps for the current session without discarding valid behaviour or notification settings
 - invalid notification channels are skipped and fall back to the default bell channel if none are valid
 - ask settings behaviour and notification enabled changes attempt to persist immediately from the settings list; save failures revert the change and show an error; config reset is guarded by a short double-press confirmation
 - `presentSingleAsMulti` is applied at ask-flow creation; toggling it does not rewrite already-normalized questions in an open flow
@@ -92,6 +91,7 @@ The codebase is split so the implementation reads through file boundaries and na
 - legacy root config files are read as a fallback only when the current config file is absent; disk is left untouched
 - invalid config files are left untouched; defaults are loaded for the session with a notice
 - live config updates can affect an in-progress ask flow immediately
+- remote lifecycle sources are only `tool` and `ask:resume`
 - remote ask submissions must be explicit `answer` or `cancel` responses; pi-ask validates ids/values but never infers approve/deny semantics from labels or option values
 
 ## Documentation rule

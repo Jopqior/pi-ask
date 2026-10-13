@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findLatestPayloadInCurrentBranch } from "../src/ask-payload-store.ts";
 import { DEFAULT_ASK_CONFIG } from "../src/config/defaults.ts";
 import { getAskConfigStore } from "../src/config/store.ts";
 import {
@@ -229,19 +228,6 @@ test("pending ask scan ignores tool results and persisted dismissals", () => {
 	);
 });
 
-test("pending dismissal does not hide the payload from manual replay", () => {
-	const lookup = findLatestPayloadInCurrentBranch(
-		scannerContext([
-			askToolCall("call-1"),
-			storedPayload("call-1"),
-			dismissed("call-1"),
-		]),
-		"tool"
-	);
-
-	assert.equal(lookup.data?.params, params);
-});
-
 test("pending ask resume scans only startup, resume, and fork TUI events", () => {
 	let sessionStartHandler: ((event: any, ctx: any) => void) | undefined;
 	const remoteAsk = createRemoteAskRuntime(new TestEventBus() as never);
@@ -379,6 +365,7 @@ test("resumed cancel persists dismissal and does not reopen on a second resume",
 
 	assert.deepEqual(harness.dismissedToolCallIds, ["call-1"]);
 	assert.equal(harness.sentMessages.length, 0);
+	assert(harness.notices.includes("Unanswered ask_user form dismissed."));
 	assert.equal(
 		bus.events.filter((event) => event.channel === PI_ASK_STARTED_EVENT).length,
 		1
@@ -406,6 +393,7 @@ function createResumeHarness(
 	let sessionStartHandler: ((event: any, ctx: any) => void) | undefined;
 	const dismissedToolCallIds: string[] = [];
 	const sentMessages: Array<{ text: string; options: unknown }> = [];
+	const notices: string[] = [];
 
 	registerPendingAskResume(
 		{
@@ -448,6 +436,7 @@ function createResumeHarness(
 				});
 			},
 			notify(message: string) {
+				notices.push(message);
 				if (message.startsWith("Unanswered ask_user form dismissed")) {
 					options.onDismissNotice?.();
 				}
@@ -460,6 +449,7 @@ function createResumeHarness(
 
 	return {
 		dismissedToolCallIds,
+		notices,
 		sentMessages,
 		start(reason: "startup" | "resume" | "fork") {
 			return sessionStartHandler?.({ type: "session_start", reason }, ctx);

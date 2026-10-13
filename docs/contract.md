@@ -179,7 +179,7 @@ This document defines the stable external behavior. It does not explain internal
 - `continuation.questionStates` marks each question as `answered`, `needs_clarification`, or `unanswered`
 - single-select answers still use arrays
 - recommendation markers never change canonical submitted labels or values
-- when `behaviour.presentSingleAsMulti` is enabled, requested single-select questions are presented and handled as multi-select in future/replayed ask flows; result question metadata keeps the requested `type`, adds `presentedType` when final presentation differs, and result text uses one compact note when any answered questions were presented differently
+- when `behaviour.presentSingleAsMulti` is enabled, requested single-select questions are presented and handled as multi-select in new/recovered ask flows; result question metadata keeps the requested `type`, adds `presentedType` when final presentation differs, and result text uses one compact note when any answered questions were presented differently
 - `indices` are 1-based rendered option positions
 - `customText` stores the free-form answer
 - on single-select questions, saving free-form text clears selected options for that question
@@ -217,16 +217,12 @@ This document defines the stable external behavior. It does not explain internal
 - on the review tab, `Submit` and `Cancel` preview notes only for answered questions
 - on the review tab, `Elaborate` preview expands to all question notes and all option notes, including notes on unselected options
 - transcript-friendly call and result rendering
-- `/answer` command to convert the latest completed assistant message into an `AskParams` form through a synthetic `ask_user` tool call and open the ask UI
-- `/answer` extraction may use an internal `freeform: true` option for open-ended questions with no explicit choices; these render as user-input-only questions with the label `Type your answer:`, no numbered option row, and no selection caret; this marker is not part of the public `ask_user` tool contract
-- `/answer:again` command to replay the latest `/answer`-extracted form on the current branch
-- `/ask:replay` command to replay the latest real `ask_user` form on the current branch
 - automatic recovery of the newest unresolved `ask_user` form on startup, resume, or fork
 - ask settings list with binary behaviour/notification toggles and a guarded reset-to-defaults action
 - `?` in the ask flow and `/ask-settings` in pi open the same lightweight ask settings overlay
-- settings attempt to persist immediately when changed: `Auto-submit when answered without notes`, `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, and `Show footer hints`; `Present single-select as multi-select` persists immediately when saving succeeds but applies only to new/replayed ask flows; save failures revert the setting and show a manual-edit message; resetting config to defaults requires pressing the reset action twice within a short confirmation window
+- settings attempt to persist immediately when changed: `Auto-submit when answered without notes`, `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, and `Show footer hints`; `Present single-select as multi-select` persists immediately when saving succeeds but applies only to new/recovered ask flows; save failures revert the setting and show a manual-edit message; resetting config to defaults requires pressing the reset action twice within a short confirmation window
 - `Keymaps` is a persisted, context-aware config section for global, main-flow, editor, note-editor, and settings-modal actions
-- the settings list shows the absolute config file path for customizing keymaps, notifications, and extraction settings
+- the settings list shows the absolute config file path for customizing keymaps and notifications
 - if the flow is already on the review tab, all questions are answered, and no notes exist, enabling auto-submit can complete the current ask flow immediately
 - elaborate results are phrased as direct follow-up instructions, for example: `User asked to elaborate on question "Which option would you like to select?" option "Option A" with note "why this one?"`
 
@@ -293,16 +289,10 @@ Remote submissions must be explicit `{ kind: "answer" }` or `{ kind: "cancel" }`
 
 See [`remote-events.md`](remote-events.md) for payload shapes, examples, and a local smoke test.
 
-## Slash command replay/extraction
+## Payload capture
 
-- valid `ask_user` payloads are persisted as branch custom entries before the UI opens, so `/ask:replay` can reopen them after cancel, `/resume`, or `/tree`
-- `/answer` scans the current branch for the latest assistant message; if that message did not finish with `stop`, extraction is refused
-- `/answer` sends the preceding user message as context with the latest assistant text and asks the extractor for one synthetic `ask_user` tool call
-- missing or invalid tool calls are retried according to `answer.extractionRetries`; raw or fenced JSON text remains supported as a last-resort fallback
-- `{ "questions": [] }` from extraction means no questions were found and is not treated as an invalid ask payload
-- command-flow cancellation closes with a notification and does not send a message to the agent
-- submitted or elaborated command-flow results are sent back with user-message semantics
-- replay commands scan only `ctx.sessionManager.getBranch()`, ignore sibling/future branch payloads, and revalidate stored payloads before opening the UI
+- valid `ask_user` payloads are persisted as `ask:payload` branch custom entries before the UI opens, with source `tool` only
+- recovery looks up payloads only on `ctx.sessionManager.getBranch()` and revalidates them before use; sibling/future branch entries and obsolete non-tool payloads are ignored
 
 ## Interrupted ask resume
 
@@ -310,9 +300,9 @@ See [`remote-events.md`](remote-events.md) for payload shapes, examples, and a l
 - recovery does not run for `new`, `reload`, or non-TUI sessions
 - the matching valid `ask:payload` supplies the form; if it is missing or invalid, pi-ask validates and uses the original tool call arguments instead
 - the recovery flow is detached from `session_start`, so an open form does not block other lifecycle handlers
-- because the interrupted `execute` promise no longer exists, submit sends the result with the same user-message semantics as replay commands
-- submit and cancel both append `ask:pending-dismissed`, which prevents another automatic reopen; `/ask:replay` still works
-- recovered flows emit remote lifecycle events with source `ask:resume`
+- because the interrupted `execute` promise no longer exists, submit or elaborate sends the result as a normal user message, queued as a follow-up if the agent is busy
+- submit, elaborate, and cancel append `ask:pending-dismissed` for that tool call, preventing it from automatically reopening again; cancel sends no message to the agent
+- remote lifecycle sources are only `tool` for live tool execution and `ask:resume` for recovered flows
 
 The fallback message includes normalized pending questions and options so the caller can re-ask them manually. `details.questions` still contains normalized question metadata, while `details.answers` stays empty until a user responds.
 

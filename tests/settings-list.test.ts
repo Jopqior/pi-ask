@@ -7,9 +7,6 @@ import type { AskConfigNotice } from "../src/config/store.ts";
 import { AskSettingsList } from "../src/ui/settings-list.ts";
 
 const savedConfig: AskConfig = {
-	answer: {
-		...DEFAULT_ASK_CONFIG.answer,
-	},
 	behaviour: {
 		autoSubmitWhenAnsweredWithoutNotes: false,
 		confirmDismissWhenDirty: true,
@@ -78,7 +75,7 @@ test("settings list renders behaviour settings and config path", () => {
 	assert(text.includes("Edit this config file to customize"));
 	assert(text.includes("keymaps"));
 	assert(text.includes("notifications"));
-	assert(text.includes("extraction settings"));
+	assert(!text.includes("extraction settings"));
 	assert(text.includes("/tmp/eko24ive-pi-ask.json"));
 	assert(text.includes("Esc / Ctrl+C / ? to close"));
 	assert.equal(text.includes("Esc to cancel"), false);

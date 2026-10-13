@@ -12,7 +12,6 @@ interface IssueCollector {
 }
 
 interface ValidationOptions {
-	allowFreeform?: boolean;
 	presentSingleAsMulti?: boolean;
 }
 
@@ -20,7 +19,7 @@ export function normalizeQuestions(
 	params: AskParams,
 	options: ValidationOptions = {}
 ): AskQuestion[] {
-	const issues = collectValidationIssues(params, options);
+	const issues = collectValidationIssues(params);
 	if (issues.length > 0) {
 		throw new Error(issues[0]?.message ?? "Invalid ask_user payload");
 	}
@@ -30,11 +29,10 @@ export function normalizeQuestions(
 }
 
 export function collectValidationIssues(
-	params: AskParams,
-	options: ValidationOptions = {}
+	params: AskParams
 ): AskValidationIssue[] {
 	const collector = createIssueCollector();
-	validateQuestions(params.questions, collector, options);
+	validateQuestions(params.questions, collector);
 	return collector.issues;
 }
 
@@ -115,14 +113,12 @@ function normalizeOption(option: AskOption): AskOption {
 		...(option.recommended === undefined
 			? {}
 			: { recommended: option.recommended }),
-		...(option.freeform ? { freeform: true } : {}),
 	};
 }
 
 function validateQuestions(
 	questions: AskParams["questions"],
-	collector: IssueCollector,
-	options: ValidationOptions
+	collector: IssueCollector
 ) {
 	if (questions.length === 0) {
 		collector.add("questions", "At least one question is required");
@@ -131,7 +127,7 @@ function validateQuestions(
 
 	const questionIds = new Set<string>();
 	for (const [questionIndex, question] of questions.entries()) {
-		validateQuestion(question, questionIndex, questionIds, collector, options);
+		validateQuestion(question, questionIndex, questionIds, collector);
 	}
 }
 
@@ -139,8 +135,7 @@ function validateQuestion(
 	question: AskQuestionInput,
 	questionIndex: number,
 	questionIds: Set<string>,
-	collector: IssueCollector,
-	options: ValidationOptions
+	collector: IssueCollector
 ) {
 	const questionNumber = questionIndex + 1;
 	const questionPath = `questions[${questionIndex}]`;
@@ -179,14 +174,6 @@ function validateQuestion(
 		`Question ${questionNumber}: at least one option is required`
 	);
 
-	validateFreeformOptions(
-		question.options,
-		questionNumber,
-		collector,
-		`${questionPath}.options`,
-		options
-	);
-
 	const optionValues = new Set<string>();
 	for (const [optionIndex, option] of question.options.entries()) {
 		validateOption(
@@ -197,32 +184,6 @@ function validateQuestion(
 			questionType,
 			collector,
 			`${questionPath}.options[${optionIndex}]`
-		);
-	}
-}
-
-function validateFreeformOptions(
-	options: AskOption[],
-	questionNumber: number,
-	collector: IssueCollector,
-	path: string,
-	validationOptions: ValidationOptions
-) {
-	const freeformCount = options.filter((option) => option.freeform).length;
-	if (freeformCount === 0) {
-		return;
-	}
-	if (!validationOptions.allowFreeform) {
-		collector.add(
-			path,
-			`Question ${questionNumber}: freeform options are only supported for /answer forms`
-		);
-		return;
-	}
-	if (freeformCount > 1 || options.length > 1) {
-		collector.add(
-			path,
-			`Question ${questionNumber}: freeform options must be the only option`
 		);
 	}
 }

@@ -98,7 +98,7 @@ function resolvePendingAskParams(
 	ctx: Pick<ExtensionContext, "sessionManager">,
 	toolCall: ToolCall
 ): AskParams | undefined {
-	const persistedPayload = findPayloadForSourceEntry(ctx, toolCall.id, "tool");
+	const persistedPayload = findPayloadForSourceEntry(ctx, toolCall.id);
 	if (persistedPayload) {
 		return persistedPayload.params;
 	}

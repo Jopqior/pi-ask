@@ -4,7 +4,7 @@ This folder keeps only the documentation needed to understand and maintain the e
 
 ## Files
 
-- `configuration.md` — source of truth for configuring pi-ask keymaps, behaviour, and `/answer` extraction
+- `configuration.md` — source of truth for configuring pi-ask keymaps, behaviour, notifications, and config migrations
 - `contract.md` — external behavior, tool payload/result details, and UX guarantees
 - `remote-events.md` — local inter-extension event contract, bridge examples, and smoke-test steps
 - `architecture.md` — module boundaries and invariants
