@@ -10,6 +10,64 @@ import {
 	getAskConfigStore,
 	resetAskConfigStore,
 } from "../src/config/store.ts";
+import { assertRemovedAutoSubmitConfigError } from "./helpers/removed-auto-submit-config.ts";
+
+test("config store blocks every value of the removed field without rewriting or falling back", async (t) => {
+	for (const value of [true, false, null, 0, "false", [], {}]) {
+		await t.test(JSON.stringify(value), async (subtest) => {
+			const path = await makeTempPath("pi-ask-config-removed-field-");
+			subtest.after(() => rm(dirname(path), { force: true, recursive: true }));
+			const content = JSON.stringify({
+				schemaVersion: 7,
+				behaviour: { autoSubmitWhenAnsweredWithoutNotes: value },
+			});
+			await writeFile(path, content, "utf-8");
+			const store = new AskConfigStore(path);
+			for (let attempt = 0; attempt < 2; attempt += 1) {
+				await assert.rejects(store.getConfig(), (error: unknown) => {
+					assertRemovedAutoSubmitConfigError(error);
+					assert(error.message.includes(path));
+					return true;
+				});
+			}
+			assert.equal(await readFile(path, "utf-8"), content);
+			assert.deepEqual(await readdir(dirname(path)), ["eko24ive-pi-ask.json"]);
+		});
+	}
+});
+
+test("config store reports the legacy source path and loads only after manual field removal", async (t) => {
+	const legacyPath = await makeTempPath("pi-ask-config-blocked-legacy-");
+	t.after(() => rm(dirname(legacyPath), { force: true, recursive: true }));
+	const path = join(dirname(legacyPath), "extensions", "eko24ive-pi-ask.json");
+	const raw = {
+		schemaVersion: 7,
+		behaviour: {
+			autoSubmitWhenAnsweredWithoutNotes: false,
+			showFooterHints: false,
+		},
+	};
+	const content = JSON.stringify(raw);
+	await writeFile(legacyPath, content);
+	const store = new AskConfigStore(path, [legacyPath]);
+	await assert.rejects(store.ensureLoaded(), (error: unknown) => {
+		assertRemovedAutoSubmitConfigError(error);
+		assert(error.message.includes(legacyPath));
+		assert.equal(error.message.includes(path), false);
+		return true;
+	});
+	assert.equal(await readFile(legacyPath, "utf-8"), content);
+	const repaired = JSON.stringify({
+		schemaVersion: 7,
+		behaviour: { showFooterHints: false },
+	});
+	await writeFile(legacyPath, repaired);
+	const result = await store.ensureLoaded();
+	assert.equal(result.notice, undefined);
+	assert.equal(result.config.behaviour.showFooterHints, false);
+	assert.equal(await readFile(legacyPath, "utf-8"), repaired);
+	await assert.rejects(readFile(path, "utf-8"), { code: "ENOENT" });
+});
 
 const DEFAULT_KEYMAPS_NOTICE_PATTERN =
 	/Using default ask keymaps for this session/;
@@ -20,7 +78,7 @@ function expectedConfigFile(
 	overrides: { behaviour?: typeof DEFAULT_ASK_CONFIG.behaviour } = {}
 ) {
 	return {
-		schemaVersion: 7,
+		schemaVersion: 8,
 		behaviour: overrides.behaviour ?? DEFAULT_ASK_CONFIG.behaviour,
 		keymaps: DEFAULT_ASK_CONFIG.keymaps,
 		notifications: DEFAULT_ASK_CONFIG.notifications,
@@ -46,7 +104,7 @@ test("resetAskConfigStore reloads the global store from disk", async () => {
 			...expectedConfigFile(),
 			behaviour: {
 				...DEFAULT_ASK_CONFIG.behaviour,
-				autoSubmitWhenAnsweredWithoutNotes: true,
+				showFooterHints: false,
 			},
 		})
 	);
@@ -57,10 +115,7 @@ test("resetAskConfigStore reloads the global store from disk", async () => {
 	resetAskConfigStore();
 	const result = await getAskConfigStore().ensureLoaded();
 
-	assert.equal(
-		result.config.behaviour.autoSubmitWhenAnsweredWithoutNotes,
-		true
-	);
+	assert.equal(result.config.behaviour.showFooterHints, false);
 	delete process.env.PI_CODING_AGENT_DIR;
 	resetAskConfigStore();
 	await rm(root, { force: true, recursive: true });
@@ -109,7 +164,6 @@ test("config store writes full normalized config on save", async () => {
 	await store.save({
 		behaviour: {
 			...DEFAULT_ASK_CONFIG.behaviour,
-			autoSubmitWhenAnsweredWithoutNotes: true,
 			showFooterHints: false,
 		},
 		keymaps: DEFAULT_ASK_CONFIG.keymaps,
@@ -121,7 +175,6 @@ test("config store writes full normalized config on save", async () => {
 		expectedConfigFile({
 			behaviour: {
 				...DEFAULT_ASK_CONFIG.behaviour,
-				autoSubmitWhenAnsweredWithoutNotes: true,
 				showFooterHints: false,
 			},
 		})
@@ -140,7 +193,7 @@ test("config store saves and reloads a configured custom answer binding", async 
 
 	await store.save({ ...DEFAULT_ASK_CONFIG, keymaps });
 	const saved = JSON.parse(await readFile(path, "utf-8"));
-	assert.equal(saved.schemaVersion, 7);
+	assert.equal(saved.schemaVersion, 8);
 	assert.deepEqual(saved.keymaps.main.editCustomAnswer, ["ctrl+e"]);
 
 	const result = await new AskConfigStore(path).ensureLoaded();
@@ -155,6 +208,24 @@ test("config store reports friendly save failures", async () => {
 
 	await assert.rejects(store.save(DEFAULT_ASK_CONFIG), SAVE_FAILURE_PATTERN);
 	await rm(path, { force: true, recursive: true });
+});
+
+test("config store retains runtime settings and does not publish changes when saving fails", async (t) => {
+	const path = await makeTempPath("pi-ask-config-save-rollback-");
+	t.after(() => rm(dirname(path), { force: true, recursive: true }));
+	const store = new AskConfigStore(path);
+	const initial = {
+		...DEFAULT_ASK_CONFIG,
+		behaviour: { ...DEFAULT_ASK_CONFIG.behaviour, showFooterHints: false },
+	};
+	await store.save(initial);
+	const updates: AskConfig[] = [];
+	store.subscribe((config) => updates.push(config));
+	await rm(path);
+	await mkdir(path);
+	await assert.rejects(store.save(DEFAULT_ASK_CONFIG), SAVE_FAILURE_PATTERN);
+	assert.deepEqual(await store.getConfig(), initial);
+	assert.deepEqual(updates, []);
 });
 
 test("config store leaves broken json unchanged and loads defaults", async () => {
@@ -183,7 +254,6 @@ test("config store loads migrated config without rewriting and saves without ans
 	const path = await makeTempPath("pi-ask-config-current-");
 	await mkdir(dirname(path), { recursive: true });
 	const behaviour = {
-		autoSubmitWhenAnsweredWithoutNotes: true,
 		confirmDismissWhenDirty: false,
 		doublePressReviewShortcuts: false,
 		presentSingleAsMulti: true,
@@ -222,7 +292,7 @@ test("config store loads migrated config without rewriting and saves without ans
 	const saved = JSON.parse(await readFile(path, "utf-8"));
 	assert.equal("answer" in saved, false);
 	assert.deepEqual(saved, {
-		schemaVersion: 7,
+		schemaVersion: 8,
 		behaviour,
 		keymaps,
 		notifications,
@@ -251,7 +321,7 @@ test("config store loads v6 with the custom answer binding without rewriting", a
 
 	await store.save(result.config);
 	const saved = JSON.parse(await readFile(path, "utf-8"));
-	assert.equal(saved.schemaVersion, 7);
+	assert.equal(saved.schemaVersion, 8);
 	assert.deepEqual(saved.keymaps.main.editCustomAnswer, ["c"]);
 });
 
@@ -264,7 +334,6 @@ test("config store preserves settings and disk on migrated custom answer key col
 				DEFAULT_ASK_CONFIG.keymaps.main;
 			const behaviour = {
 				...DEFAULT_ASK_CONFIG.behaviour,
-				autoSubmitWhenAnsweredWithoutNotes: true,
 				confirmDismissWhenDirty: false,
 				presentSingleAsMulti: true,
 				showFooterHints: false,
@@ -315,7 +384,6 @@ test("config store reads legacy root config without copying it", async () => {
 		JSON.stringify({
 			schemaVersion: 1,
 			behaviour: {
-				autoSubmitWhenAnsweredWithoutNotes: true,
 				confirmDismissWhenDirty: true,
 				doublePressReviewShortcuts: true,
 				showFooterHints: false,
@@ -327,10 +395,6 @@ test("config store reads legacy root config without copying it", async () => {
 
 	const result = await store.ensureLoaded();
 
-	assert.equal(
-		result.config.behaviour.autoSubmitWhenAnsweredWithoutNotes,
-		true
-	);
 	assert.equal(result.config.behaviour.confirmDismissWhenDirty, true);
 	assert.equal(result.config.behaviour.doublePressReviewShortcuts, true);
 	assert.equal(result.config.behaviour.showFooterHints, false);
@@ -351,7 +415,6 @@ test("config store leaves legacy root config when extensions config exists", asy
 		JSON.stringify({
 			schemaVersion: 1,
 			behaviour: {
-				autoSubmitWhenAnsweredWithoutNotes: false,
 				confirmDismissWhenDirty: true,
 				doublePressReviewShortcuts: true,
 				showFooterHints: true,
@@ -376,10 +439,6 @@ test("config store leaves legacy root config when extensions config exists", asy
 
 	const result = await store.ensureLoaded();
 
-	assert.equal(
-		result.config.behaviour.autoSubmitWhenAnsweredWithoutNotes,
-		false
-	);
 	assert.equal(result.config.behaviour.showFooterHints, true);
 	assert.ok(await readFile(legacyPath, "utf-8"));
 	await rm(root, { force: true, recursive: true });
@@ -393,7 +452,6 @@ test("config store falls back only keymaps when configured keymaps are invalid",
 		JSON.stringify({
 			schemaVersion: 1,
 			behaviour: {
-				autoSubmitWhenAnsweredWithoutNotes: true,
 				confirmDismissWhenDirty: true,
 				doublePressReviewShortcuts: true,
 				showFooterHints: false,
@@ -412,10 +470,6 @@ test("config store falls back only keymaps when configured keymaps are invalid",
 
 	const result = await store.ensureLoaded();
 
-	assert.equal(
-		result.config.behaviour.autoSubmitWhenAnsweredWithoutNotes,
-		true
-	);
 	assert.equal(result.config.behaviour.confirmDismissWhenDirty, true);
 	assert.equal(result.config.behaviour.doublePressReviewShortcuts, true);
 	assert.equal(result.config.behaviour.showFooterHints, false);

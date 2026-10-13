@@ -16,6 +16,7 @@ import {
 } from "../src/remote-ask.ts";
 import { registerPendingAskResume } from "../src/resume-pending-ask.ts";
 import type { AskParams } from "../src/types.ts";
+import { useRemovedAutoSubmitConfig } from "./helpers/removed-auto-submit-config.ts";
 
 const CANVAS_RE = /Canvas/;
 
@@ -276,6 +277,54 @@ test("pending ask resume scans only startup, resume, and fork TUI events", () =>
 	remoteAsk.disposeAll();
 });
 
+test("pending ask recovery blocks removed config without opening or dismissing the form", {
+	timeout: 2000,
+}, async (t) => {
+	for (const reason of ["startup", "resume", "fork"] as const) {
+		await t.test(reason, async (subtest) => {
+			const path = await useRemovedAutoSubmitConfig(subtest, false);
+			const branch: unknown[] = [
+				askToolCall("blocked-call"),
+				storedPayload("blocked-call"),
+			];
+			const bus = new TestEventBus();
+			const remoteAsk = createRemoteAskRuntime(bus as never);
+			subtest.after(() => remoteAsk.disposeAll());
+			let opened = false;
+			let reportError: ((message: string) => void) | undefined;
+			const errorNotice = new Promise<string>((resolve) => {
+				reportError = resolve;
+			});
+			const harness = createResumeHarness(branch, remoteAsk, {
+				onOpen: () => {
+					opened = true;
+				},
+				onNotice: (message) => {
+					if (message.startsWith("Could not reopen")) {
+						reportError?.(message);
+					}
+				},
+			});
+			harness.start(reason);
+			const message = await errorNotice;
+			assert(message.includes(path));
+			assert(message.includes("behaviour.autoSubmitWhenAnsweredWithoutNotes"));
+			assert(message.includes("manually remove"));
+			assert.equal(opened, false);
+			assert.deepEqual(harness.dismissedToolCallIds, []);
+			assert.deepEqual(harness.sentMessages, []);
+			assert.equal(
+				bus.events.some((event) => event.channel === PI_ASK_STARTED_EVENT),
+				false
+			);
+			assert.equal(
+				findPendingAskToolCall(scannerContext(branch))?.toolCallId,
+				"blocked-call"
+			);
+		});
+	}
+});
+
 test("resumed submit persists dismissal, delivers an answer, and emits remote lifecycle events", {
 	timeout: 2000,
 }, async () => {
@@ -387,6 +436,8 @@ function createResumeHarness(
 	options: {
 		idle?: boolean;
 		onDismissNotice?: () => void;
+		onNotice?: (message: string) => void;
+		onOpen?: () => void;
 		onSend?: (text: string, sendOptions: unknown) => void;
 	} = {}
 ) {
@@ -422,6 +473,7 @@ function createResumeHarness(
 		sessionManager: { getBranch: () => branch },
 		ui: {
 			custom(callback: (...args: any[]) => unknown) {
+				options.onOpen?.();
 				return new Promise((resolve) => {
 					callback(
 						{
@@ -437,6 +489,7 @@ function createResumeHarness(
 			},
 			notify(message: string) {
 				notices.push(message);
+				options.onNotice?.(message);
 				if (message.startsWith("Unanswered ask_user form dismissed")) {
 					options.onDismissNotice?.();
 				}

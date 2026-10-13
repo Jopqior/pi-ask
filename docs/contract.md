@@ -213,17 +213,16 @@ This document defines the stable external behavior. It does not explain internal
 - question notes via `Shift+N`
 - option notes via `n`
 - number-key quick selection
-- submit/elaborate/cancel review tab
+- submit/elaborate/cancel review tab; advancing from the final question always opens Review without submitting, even when all questions are answered and there are no notes
 - on the review tab, `Submit` and `Cancel` preview notes only for answered questions
 - on the review tab, `Elaborate` preview expands to all question notes and all option notes, including notes on unselected options
 - transcript-friendly call and result rendering
 - automatic recovery of the newest unresolved `ask_user` form on startup, resume, or fork
 - ask settings list with binary behaviour/notification toggles and a guarded reset-to-defaults action
 - `?` in the ask flow and `/ask-settings` in pi open the same lightweight ask settings overlay
-- settings attempt to persist immediately when changed: `Auto-submit when answered without notes`, `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, and `Show footer hints`; `Present single-select as multi-select` persists immediately when saving succeeds but applies only to new/recovered ask flows; save failures revert the setting and show a manual-edit message; resetting config to defaults requires pressing the reset action twice within a short confirmation window
+- settings attempt to persist immediately when changed: `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, and `Show footer hints`; `Present single-select as multi-select` persists immediately when saving succeeds but applies only to new/recovered ask flows; save failures revert the setting and show a manual-edit message; resetting config to defaults requires pressing the reset action twice within a short confirmation window
 - `Keymaps` is a persisted, context-aware config section for global, main-flow, editor, note-editor, and settings-modal actions
 - the settings list shows the absolute config file path for customizing keymaps and notifications
-- if the flow is already on the review tab, all questions are answered, and no notes exist, enabling auto-submit can complete the current ask flow immediately
 - elaborate results are phrased as direct follow-up instructions, for example: `User asked to elaborate on question "Which option would you like to select?" option "Option A" with note "why this one?"`
 
 ## Keyboard behavior
@@ -272,18 +271,20 @@ Destructive type changes, dirty dismissal, review double presses, and settings r
 
 ## Config version
 
-- current persisted schema is version 7; explicit saves write version 7
-- versions 1–6 migrate in memory, adding missing `main.editCustomAnswer: ["c"]` while preserving existing bindings and other settings; obsolete `answer` settings remain discarded
+- any config containing `behaviour.autoSubmitWhenAnsweredWithoutNotes` blocks ask before migration, regardless of the field value (including `false`); the error names the actual current or legacy source path and requires manual field removal followed by `/reload` or restart, with no fallback to defaults
+- this blocking rule applies to normal tool calls in every mode and interrupted-form recovery; blocked recovery does not dismiss the pending call or deliver an answer
+- current persisted schema is version 8; explicit saves write version 8
+- after the removed-field check passes, versions 1–7 migrate in memory, adding missing `main.editCustomAnswer: ["c"]` while preserving existing bindings and other settings; obsolete `answer` settings remain discarded
 - invalid keymaps, including collisions introduced by the new default binding, fall back to the full default keymaps with a warning while preserving valid behaviour and notification settings/channels
 - loading or migrating never rewrites the config file
 
 ## Non-TUI and non-interactive modes
 
-The rich ask flow uses `ctx.ui.custom()` and opens only in TUI mode. In print, JSON, RPC, or any other non-TUI mode, the tool returns a `Needs user input: ask_user requires interactive TUI mode.` message in `content` and a cancelled result in `details` instead of opening custom UI.
+The rich ask flow uses `ctx.ui.custom()` and opens only in TUI mode. After config validation succeeds, in print, JSON, RPC, or any other non-TUI mode, the tool returns a `Needs user input: ask_user requires interactive TUI mode.` message in `content` and a cancelled result in `details` instead of opening custom UI.
 
 The public tool schema requires question `id` and `prompt` plus option `value` and `label`, and it restricts question `type` to `single`, `multi`, or `preview`, so malformed structural fields fail before execution. The tool still validates trimmed text, uniqueness, option counts, and preview requirements during execution and returns structured issues for those failures. Result rendering falls back to Pi's raw tool-error text when schema validation prevents execution.
 
-The ask flow subscribes to runtime settings updates while open. In practice, this means changing `Auto-submit when answered without notes`, `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, `Show footer hints`, resetting config to defaults, or reloading config-backed keymaps can affect the in-progress ask flow immediately instead of only future asks when the change is saved or otherwise applied in memory. Load-time migrations and invalid config handling do not rewrite, rename, or back up the config file; invalid files load defaults for the session and show a notice. `Present single-select as multi-select` is applied when an ask flow is created and does not rewrite question semantics for an already-open flow; use `main.changeQuestionType` for live per-question changes.
+The ask flow subscribes to runtime settings updates while open. In practice, this means changing `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, `Show footer hints`, resetting config to defaults, or reloading config-backed keymaps can affect the in-progress ask flow immediately instead of only future asks when the change is saved or otherwise applied in memory. Load-time migrations and invalid config handling do not rewrite, rename, or back up the config file; invalid files load defaults for the session and show a notice, except that the removed auto-submit field blocks ask instead. `Present single-select as multi-select` is applied when an ask flow is created and does not rewrite question semantics for an already-open flow; use `main.changeQuestionType` for live per-question changes.
 
 ## Notifications
 

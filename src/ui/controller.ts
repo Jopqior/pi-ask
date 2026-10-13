@@ -43,7 +43,6 @@ import {
 } from "../state/transitions.ts";
 import { isEditingView } from "../state/view.ts";
 import type { AskParams, AskResult, AskState } from "../types.ts";
-import { maybeAutoSubmitState } from "./auto-submit.ts";
 import { createAskAutocompleteProvider } from "./autocomplete.ts";
 import {
 	DIRTY_DISMISS_NOTICE,
@@ -165,12 +164,7 @@ function createAskFlowController(
 	controller.unsubscribeConfig = getAskConfigStore().subscribe((config) => {
 		controller.config = config;
 		controller.configNotice = undefined;
-		controller.state = maybeAutoSubmitState(
-			controller.state,
-			controller.config
-		);
 		refresh(controller);
-		maybeFinish(controller);
 	});
 
 	controller.editor.onSubmit = (value) => submitEditor(controller, value);
@@ -435,7 +429,6 @@ function commitState(
 	if (options.syncSelection !== false) {
 		syncSelection(controller);
 	}
-	controller.state = maybeAutoSubmitState(controller.state, controller.config);
 	hydrateEditor(controller);
 	refresh(controller);
 	if (options.finish) {
@@ -451,7 +444,6 @@ function submitEditor(controller: AskFlowController, value: string) {
 	}
 	controller.state = nextState;
 	syncSelection(controller);
-	controller.state = maybeAutoSubmitState(controller.state, controller.config);
 	hydrateEditor(controller);
 	refresh(controller);
 	maybeFinish(controller);

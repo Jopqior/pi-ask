@@ -4,14 +4,13 @@ import {
 } from "../constants/keymaps.ts";
 import type {
 	AskConfig,
-	AskConfigFileV7,
+	AskConfigFileV8,
 	AskConfigKeymaps,
 	AskNotificationChannel,
 } from "./schema.ts";
 
 export const DEFAULT_ASK_CONFIG: AskConfig = {
 	behaviour: {
-		autoSubmitWhenAnsweredWithoutNotes: false,
 		confirmDismissWhenDirty: true,
 		doublePressReviewShortcuts: true,
 		presentSingleAsMulti: false,
@@ -25,13 +24,10 @@ export const DEFAULT_ASK_CONFIG: AskConfig = {
 };
 
 export function normalizeAskConfig(
-	config?: Partial<AskConfigFileV7> | AskConfig
+	config?: Partial<AskConfigFileV8> | AskConfig
 ): AskConfig {
 	return {
 		behaviour: {
-			autoSubmitWhenAnsweredWithoutNotes:
-				config?.behaviour?.autoSubmitWhenAnsweredWithoutNotes ??
-				DEFAULT_ASK_CONFIG.behaviour.autoSubmitWhenAnsweredWithoutNotes,
 			confirmDismissWhenDirty:
 				config?.behaviour?.confirmDismissWhenDirty ??
 				DEFAULT_ASK_CONFIG.behaviour.confirmDismissWhenDirty,
@@ -55,13 +51,11 @@ export function normalizeAskConfig(
 	};
 }
 
-export function toAskConfigFileV7(config: AskConfig): AskConfigFileV7 {
+export function toAskConfigFileV8(config: AskConfig): AskConfigFileV8 {
 	const normalized = normalizeAskConfig(config);
 	return {
-		schemaVersion: 7,
+		schemaVersion: 8,
 		behaviour: {
-			autoSubmitWhenAnsweredWithoutNotes:
-				normalized.behaviour.autoSubmitWhenAnsweredWithoutNotes,
 			confirmDismissWhenDirty: normalized.behaviour.confirmDismissWhenDirty,
 			doublePressReviewShortcuts:
 				normalized.behaviour.doublePressReviewShortcuts,

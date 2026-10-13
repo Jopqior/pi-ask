@@ -6,9 +6,10 @@ import type { AskConfig } from "../src/config/schema.ts";
 import type { AskConfigNotice } from "../src/config/store.ts";
 import { AskSettingsList } from "../src/ui/settings-list.ts";
 
+const confirmDismissEnabled = /Confirm dismiss when dirty\s+\[on\]/;
+
 const savedConfig: AskConfig = {
 	behaviour: {
-		autoSubmitWhenAnsweredWithoutNotes: false,
 		confirmDismissWhenDirty: true,
 		doublePressReviewShortcuts: true,
 		presentSingleAsMulti: false,
@@ -67,8 +68,9 @@ test("settings list renders behaviour settings and config path", () => {
 	assert(text.includes("@jopqior/pi-ask"));
 	assert(text.includes("Live settings"));
 	assert(text.includes("Defaults for future asks"));
-	assert(text.includes("Auto-submit when answered without notes"));
-	assert(text.includes("[off]"));
+	assert.equal(text.includes("Auto-submit"), false);
+	assert(text.includes("Double-press review shortcuts"));
+	assert(text.includes("Show footer hints"));
 	assert(text.includes("Confirm dismiss when dirty"));
 	assert(text.includes("Present single-select as multi-select"));
 	assert(text.includes("on"));
@@ -107,8 +109,7 @@ test("settings list saves behaviour changes immediately without success feedback
 	await new Promise((resolve) => setImmediate(resolve));
 
 	const text = list.render(72).join("\n");
-	assert.equal(saved?.behaviour.autoSubmitWhenAnsweredWithoutNotes, true);
-	assert.equal(saved?.behaviour.confirmDismissWhenDirty, true);
+	assert.equal(saved?.behaviour.confirmDismissWhenDirty, false);
 	assert.equal(saved?.behaviour.doublePressReviewShortcuts, true);
 	assert.equal(saved?.behaviour.presentSingleAsMulti, false);
 	assert.equal(saved?.behaviour.showFooterHints, true);
@@ -125,8 +126,7 @@ test("settings list shows save failures and reverts the toggle", async () => {
 
 	const text = list.render(72).join("\n");
 	assert(text.includes("disk nope"));
-	assert(text.includes("Auto-submit when answered without notes"));
-	assert(text.includes("[off]"));
+	assert.match(text, confirmDismissEnabled);
 });
 
 test("settings list renders load warnings", () => {
@@ -188,7 +188,8 @@ test("settings list uses configured navigation and close keys", async () => {
 	list.handleInput("x");
 	await new Promise((resolve) => setImmediate(resolve));
 
-	assert.equal(saved?.behaviour.confirmDismissWhenDirty, false);
+	assert.equal(saved?.behaviour.doublePressReviewShortcuts, false);
+	assert.equal(saved?.behaviour.confirmDismissWhenDirty, true);
 });
 
 test("settings list resets config to defaults after double press", async () => {
@@ -198,7 +199,6 @@ test("settings list resets config to defaults after double press", async () => {
 		...savedConfig,
 		behaviour: {
 			...savedConfig.behaviour,
-			autoSubmitWhenAnsweredWithoutNotes: true,
 			showFooterHints: false,
 		},
 		notifications: {

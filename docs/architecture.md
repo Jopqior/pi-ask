@@ -67,6 +67,7 @@ The codebase is split so the implementation reads through file boundaries and na
 ## Invariants worth preserving
 
 - submit is never blocked by unanswered questions
+- advancing from the final question opens Review; state transitions and live settings updates never auto-submit
 - single-select answers serialize as arrays
 - single-select (including preview) digits select idempotently without advancing, Space toggles without advancing, and Enter selects/confirms then advances; multi-select digits/Space toggle and Enter advances without changing selections
 - when `behaviour.presentSingleAsMulti` is enabled, future single-select questions are handled with multi-select state semantics while result metadata preserves the requested `type` and adds `presentedType`
@@ -82,7 +83,8 @@ The codebase is split so the implementation reads through file boundaries and na
 - editor input keeps `c` as text and preserves native completion
 - destructive type changes, dirty dismissal, review double presses, and settings reset keep independent confirmation state; no action can satisfy another guard
 - persisted ask settings are migrated to the current schema version in memory, validated, and normalized before use without rewriting the config file on load
-- config schema versions 1–6 migrate to version 7 in memory, preserving existing bindings and other settings, adding missing `main.editCustomAnswer: ["c"]`, and discarding the obsolete `answer` section; explicit saves write version 7
+- the migration boundary rejects any presence of `behaviour.autoSubmitWhenAnsweredWithoutNotes` before upgrading versions; the store propagates this blocking error with the actual current/legacy source path instead of loading defaults, so both normal tool calls and recovery fail before opening a flow
+- after that check passes, config schema versions 1–7 migrate to version 8 in memory, preserving existing bindings and other settings, adding missing `main.editCustomAnswer: ["c"]`, and discarding the obsolete `answer` section; explicit saves write version 8
 - payload capture persists `ask:payload` entries with source `tool` only; recovery lookup scans only the current branch, revalidates payloads, and ignores obsolete non-tool entries
 - interrupted-ask recovery selects only the newest unresolved `ask_user` call on the active branch, prefers its valid persisted payload, and validates original arguments as fallback
 - recovered forms open only for TUI `startup`, `resume`, and `fork` events; the flow stays detached from the lifecycle handler
@@ -94,7 +96,7 @@ The codebase is split so the implementation reads through file boundaries and na
 - `main.changeQuestionType` changes the active question type live (non-preview: `single <-> multi`; preview: `preview <-> multi`) and may require confirmation before destructive multi-to-single conversion
 - when the ask config file is missing, the first ask use attempts to write a default persisted config snapshot under `~/.pi/agent/extensions/`; if writing fails, built-in defaults are used for the session
 - legacy root config files are read as a fallback only when the current config file is absent; disk is left untouched
-- invalid config files are left untouched; defaults are loaded for the session with a notice
+- invalid config files are left untouched; defaults are loaded for the session with a notice except for the removed-field blocking error
 - live config updates can affect an in-progress ask flow immediately
 - remote lifecycle sources are only `tool` and `ask:resume`
 - remote ask submissions must be explicit `answer` or `cancel` responses; pi-ask validates ids/values but never infers approve/deny semantics from labels or option values

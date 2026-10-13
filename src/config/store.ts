@@ -5,7 +5,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	DEFAULT_ASK_CONFIG,
 	normalizeAskConfig,
-	toAskConfigFileV7,
+	toAskConfigFileV8,
 } from "./defaults.ts";
 import { AskConfigMigrationError, migrateAskConfig } from "./migrate.ts";
 import type { AskConfig } from "./schema.ts";
@@ -54,11 +54,14 @@ export class AskConfigStore {
 		if (!this.loadPromise) {
 			this.loadPromise = this.loadFromDisk();
 		}
-		const result = await this.loadPromise;
-		this.config = result.config;
-		this.notice = result.notice;
-		this.loadPromise = undefined;
-		return result;
+		try {
+			const result = await this.loadPromise;
+			this.config = result.config;
+			this.notice = result.notice;
+			return result;
+		} finally {
+			this.loadPromise = undefined;
+		}
 	}
 
 	async getConfig(): Promise<AskConfig> {
@@ -68,7 +71,7 @@ export class AskConfigStore {
 	async save(config: AskConfig | Partial<AskConfig>): Promise<AskConfig> {
 		const normalized = normalizeAskConfig(config);
 		const content = JSON.stringify(
-			toAskConfigFileV7(normalized),
+			toAskConfigFileV8(normalized),
 			null,
 			2
 		).concat("\n");
@@ -91,24 +94,26 @@ export class AskConfigStore {
 	}
 
 	private async loadFromDisk(): Promise<AskConfigLoadResult> {
-		const content = await this.readDiskConfig();
-		if (content === undefined) {
+		const sourceFile = await this.readDiskConfig();
+		if (sourceFile === undefined) {
 			return this.loadMissingConfig();
 		}
 
-		const parsed = parseJson(content);
+		const parsed = parseJson(sourceFile.content);
 		if (!parsed.ok) {
 			return this.loadDefaultsWithNotice(INVALID_CONFIG_NOTICE);
 		}
 
-		return this.loadParsedConfig(parsed.value);
+		return this.loadParsedConfig(parsed.value, sourceFile.path);
 	}
 
-	private async readDiskConfig(): Promise<string | undefined> {
+	private async readDiskConfig(): Promise<
+		{ content: string; path: string } | undefined
+	> {
 		for (const path of [this.configPath, ...this.legacyConfigPaths]) {
 			const content = await readConfigFileIfPresent(path);
 			if (content !== undefined) {
-				return content;
+				return { content, path };
 			}
 		}
 	}
@@ -129,7 +134,7 @@ export class AskConfigStore {
 		}
 	}
 
-	private loadParsedConfig(parsed: unknown): AskConfigLoadResult {
+	private loadParsedConfig(parsed: unknown, path: string): AskConfigLoadResult {
 		try {
 			const migrated = migrateAskConfig(parsed);
 			return {
@@ -143,6 +148,9 @@ export class AskConfigStore {
 			};
 		} catch (error) {
 			if (error instanceof AskConfigMigrationError) {
+				if (error.reason === "removed_field") {
+					throw new Error(`Invalid ask config at ${path}. ${error.message}`);
+				}
 				return this.loadDefaultsWithNotice(
 					error.reason === "migration_failed"
 						? MIGRATION_FAILED_NOTICE

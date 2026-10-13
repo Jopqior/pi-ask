@@ -10,6 +10,19 @@ const singleQuestion: AskParams = {
 	],
 };
 
+test("confirming the last answer opens Review and requires explicit submission", async () => {
+	const flow = await openAskFlow(singleQuestion);
+	try {
+		flow.press("\r");
+		assert.equal(flow.result(), undefined);
+		assert.equal(flow.text().includes("Review answers"), true);
+		flow.press("\r");
+		assert.deepEqual((await flow.resultPromise).answers.q1?.values, ["a"]);
+	} finally {
+		flow.dispose();
+	}
+});
+
 test("single digits and Space stay for inspection; Enter selects the highlighted answer", async () => {
 	const flow = await openAskFlow({
 		questions: [

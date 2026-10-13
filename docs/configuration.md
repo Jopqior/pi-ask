@@ -22,17 +22,18 @@ Older pi-ask versions wrote this file at `~/.pi/agent/eko24ive-pi-ask.json`. If 
 
 ## Config versions and migrations
 
-`schemaVersion` identifies the persisted config shape; the current version is `7`. Versions `1`–`6` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section from versions `1`–`5`. Version `6` gains `main.editCustomAnswer: ["c"]` only when that action is missing; existing bindings are preserved. Loading never rewrites the file; an explicit save writes version `7`.
+`schemaVersion` identifies the persisted config shape; the current version is `8`. Before migration, pi-ask rejects any config containing `behaviour.autoSubmitWhenAnsweredWithoutNotes`, even when its value is `false`, `null`, or another non-boolean value. Ask is blocked in every mode, including interrupted-form recovery; it does not fall back to defaults. The error names the actual config file (including a legacy fallback file) and requires you to manually remove the field, then run `/reload` or restart pi. Loading leaves the file unchanged.
 
-Unsupported future versions or invalid files are left unchanged and defaults are loaded for the current session. Fix the file, then run `/reload` or restart pi.
+Once that field is absent, versions `1`–`7` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section from versions `1`–`5`. Version `6` gains `main.editCustomAnswer: ["c"]` only when that action is missing; existing bindings are preserved. Loading never rewrites the file; an explicit save writes version `8`.
+
+Other unsupported future versions or invalid files are left unchanged and defaults are loaded for the current session. Fix the file, then run `/reload` or restart pi.
 
 ## Config shape
 
 ```json
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "behaviour": {
-    "autoSubmitWhenAnsweredWithoutNotes": false,
     "confirmDismissWhenDirty": true,
     "doublePressReviewShortcuts": true,
     "presentSingleAsMulti": false,
@@ -85,11 +86,7 @@ Unsupported future versions or invalid files are left unchanged and defaults are
 
 ## Behaviour
 
-### `behaviour.autoSubmitWhenAnsweredWithoutNotes`
-
-- type: boolean
-- default: `false`
-- effect: when enabled, a fully answered ask flow with no notes can auto-submit from the review tab
+Answering the final question always opens Review. Submission requires an explicit review action; there is no auto-submit setting.
 
 ### `behaviour.confirmDismissWhenDirty`
 
@@ -305,9 +302,8 @@ Invalid keymaps include:
 
 ```json
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "behaviour": {
-    "autoSubmitWhenAnsweredWithoutNotes": true,
     "confirmDismissWhenDirty": true,
     "doublePressReviewShortcuts": true,
     "presentSingleAsMulti": false,
@@ -371,7 +367,8 @@ Invalid keymaps include:
 When editing this config for a user:
 
 - preserve unrelated fields
-- set `schemaVersion` to `7` and remove the obsolete `answer` section when saving an older config
+- manually remove `behaviour.autoSubmitWhenAnsweredWithoutNotes` if present; changing its value to `false` does not unblock ask
+- set `schemaVersion` to `8` and remove the obsolete `answer` section when saving an older config
 - add `main.editCustomAnswer` when missing; use `["c"]` unless it conflicts with another binding, in which case ask the user which key to use
 - do not assign fixed numeric shortcuts (`1` through `9`) to configurable actions
 - do not create duplicate bindings within a context or between `global` and `main`, `editor`, or `noteEditor`

@@ -58,14 +58,6 @@ type Setting = ActionSetting | ToggleSetting;
 const SETTINGS = [
 	{
 		description:
-			"Auto-submit completed ask flows when no question or option notes were added.",
-		key: "autoSubmitWhenAnsweredWithoutNotes",
-		section: "Live settings",
-		label: "Auto-submit when answered without notes",
-		type: "toggle",
-	},
-	{
-		description:
 			"Require a second cancel or dismiss action before discarding answered or drafted ask content.",
 		key: "confirmDismissWhenDirty",
 		section: "Live settings",

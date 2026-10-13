@@ -5,15 +5,18 @@ import {
 	type AskConfigVersionMigrationResult,
 	migrateAskConfigFileToCurrent,
 } from "./migrations/index.ts";
-import type { AskConfig, AskConfigFileV7 } from "./schema.ts";
-import { validateAskConfigFileV7 } from "./schema.ts";
+import type { AskConfig, AskConfigFileV8 } from "./schema.ts";
+import { validateAskConfigFileV8 } from "./schema.ts";
 
 export class AskConfigMigrationError extends Error {
-	readonly reason: "invalid_or_unsupported" | "migration_failed";
+	readonly reason:
+		| "invalid_or_unsupported"
+		| "migration_failed"
+		| "removed_field";
 
 	constructor(
 		message: string,
-		reason: "invalid_or_unsupported" | "migration_failed"
+		reason: "invalid_or_unsupported" | "migration_failed" | "removed_field"
 	) {
 		super(message);
 		this.reason = reason;
@@ -27,6 +30,19 @@ export interface AskConfigMigrationResult {
 }
 
 export function migrateAskConfig(raw: unknown): AskConfigMigrationResult {
+	if (raw && typeof raw === "object" && "behaviour" in raw) {
+		const behaviour = raw.behaviour;
+		if (
+			behaviour &&
+			typeof behaviour === "object" &&
+			"autoSubmitWhenAnsweredWithoutNotes" in behaviour
+		) {
+			throw new AskConfigMigrationError(
+				"Ask is blocked: behaviour.autoSubmitWhenAnsweredWithoutNotes was removed. Please manually remove this field from the config file and run /reload.",
+				"removed_field"
+			);
+		}
+	}
 	let migratedFile: AskConfigVersionMigrationResult;
 	try {
 		migratedFile = migrateAskConfigFileToCurrent(raw);
@@ -39,14 +55,14 @@ export function migrateAskConfig(raw: unknown): AskConfigMigrationResult {
 		);
 	}
 
-	if (!validateAskConfigFileV7.Check(migratedFile.config)) {
+	if (!validateAskConfigFileV8.Check(migratedFile.config)) {
 		throw new AskConfigMigrationError(
 			"Config was invalid or unsupported.",
 			"invalid_or_unsupported"
 		);
 	}
 
-	const currentFile = migratedFile.config as AskConfigFileV7;
+	const currentFile = migratedFile.config as AskConfigFileV8;
 	const config = normalizeAskConfig(currentFile);
 	const keymapsResult = normalizeConfiguredKeymaps(currentFile.keymaps);
 	if (!keymapsResult.ok) {

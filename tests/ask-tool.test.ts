@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import { Value } from "typebox/value";
 import { registerAskTool } from "../src/ask-tool.ts";
+import { DEFAULT_ASK_CONFIG } from "../src/config/defaults.ts";
+import { getAskConfigStore } from "../src/config/store.ts";
 import { AskOptionSchema, AskParamsSchema } from "../src/schema.ts";
 import type { AskParams } from "../src/types.ts";
+import {
+	assertRemovedAutoSubmitConfigError,
+	useRemovedAutoSubmitConfig,
+} from "./helpers/removed-auto-submit-config.ts";
+
+beforeEach(() => getAskConfigStore().setConfig(DEFAULT_ASK_CONFIG));
 
 const NON_INTERACTIVE_MESSAGE_RE =
 	/Needs user input: ask_user requires interactive TUI mode\./;
@@ -72,6 +80,35 @@ function sampleParams(): AskParams {
 		],
 	};
 }
+
+test("ask tool blocks removed config in every mode before opening UI or storing a payload", async (t) => {
+	for (const mode of ["tui", "print", "rpc"]) {
+		for (const value of [true, false, "false"]) {
+			await t.test(`${mode}: ${JSON.stringify(value)}`, async (subtest) => {
+				const path = await useRemovedAutoSubmitConfig(subtest, value);
+				const { entries, tool } = registerMockTool();
+				let opened = false;
+				await assert.rejects(
+					tool.execute("blocked-call", sampleParams(), undefined, noop, {
+						mode,
+						ui: {
+							custom() {
+								opened = true;
+							},
+						},
+					}),
+					(error: unknown) => {
+						assertRemovedAutoSubmitConfigError(error);
+						assert(error.message.includes(path));
+						return true;
+					}
+				);
+				assert.equal(opened, false);
+				assert.deepEqual(entries, []);
+			});
+		}
+	}
+});
 
 test("ask option schema and tool guidance support grounded recommendations", () => {
 	const { tool } = registerMockTool();

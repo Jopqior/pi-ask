@@ -1,7 +1,7 @@
 import { normalizeLegacyFlatKeymaps } from "../../constants/keymaps.ts";
 import type { AskConfigMigration, VersionedAskConfigFile } from "./types.ts";
 
-export const CURRENT_ASK_CONFIG_SCHEMA_VERSION = 7;
+export const CURRENT_ASK_CONFIG_SCHEMA_VERSION = 8;
 
 const ASK_CONFIG_MIGRATIONS: AskConfigMigration[] = [
 	{
@@ -62,6 +62,11 @@ const ASK_CONFIG_MIGRATIONS: AskConfigMigration[] = [
 			keymaps: addV7Keymaps(config.keymaps),
 			schemaVersion: 7,
 		}),
+	},
+	{
+		from: 7,
+		to: 8,
+		migrate: (config) => ({ ...config, schemaVersion: 8 }),
 	},
 ];
 

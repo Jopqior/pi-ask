@@ -3,6 +3,7 @@ import test from "node:test";
 import { DEFAULT_ASK_CONFIG } from "../src/config/defaults.ts";
 import { migrateAskConfig } from "../src/config/migrate.ts";
 import { CURRENT_ASK_CONFIG_SCHEMA_VERSION } from "../src/config/migrations/index.ts";
+import { assertRemovedAutoSubmitConfigError } from "./helpers/removed-auto-submit-config.ts";
 
 const INVALID_CONFIG_PATTERN = /Config was invalid or unsupported/;
 
@@ -17,6 +18,24 @@ const currentConfigFile = {
 	behaviour: DEFAULT_ASK_CONFIG.behaviour,
 	keymaps: DEFAULT_ASK_CONFIG.keymaps,
 };
+
+test("config migration rejects every value of the removed field before version validation", () => {
+	for (const schemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 999, undefined]) {
+		for (const value of [true, false, null, 0, "false", [], {}]) {
+			assert.throws(
+				() =>
+					migrateAskConfig({
+						schemaVersion,
+						behaviour: { autoSubmitWhenAnsweredWithoutNotes: value },
+					}),
+				(error: unknown) => {
+					assertRemovedAutoSubmitConfigError(error);
+					return true;
+				}
+			);
+		}
+	}
+});
 
 test("config migration framework accepts the current schema version", () => {
 	const result = migrateAskConfig(currentConfigFile);
@@ -96,7 +115,6 @@ test("config migration maps previous-version config files into current shape", (
 test("config migration preserves v4 and v5 settings and drops obsolete answer config", () => {
 	for (const schemaVersion of [4, 5]) {
 		const behaviour = {
-			autoSubmitWhenAnsweredWithoutNotes: true,
 			confirmDismissWhenDirty: false,
 			doublePressReviewShortcuts: false,
 			showFooterHints: false,
@@ -183,8 +201,37 @@ test("config migration upgrades v6 with the custom answer binding and preserves 
 	assert.deepEqual(raw, original);
 });
 
+test("config migration upgrades v7 in memory after the removed field is deleted", () => {
+	const raw = {
+		schemaVersion: 7,
+		behaviour: { confirmDismissWhenDirty: false, presentSingleAsMulti: true },
+		keymaps: {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: { ...DEFAULT_ASK_CONFIG.keymaps.main, confirm: ["ctrl+k"] },
+		},
+		notifications: { channels: ["osc777"], enabled: false },
+	};
+	const original = structuredClone(raw);
+	const result = migrateAskConfig(raw);
+	assert.equal(CURRENT_ASK_CONFIG_SCHEMA_VERSION, 8);
+	assert.equal(result.migrated, true);
+	assert.equal(
+		"autoSubmitWhenAnsweredWithoutNotes" in result.config.behaviour,
+		false
+	);
+	assert.deepEqual(result.config.behaviour, {
+		confirmDismissWhenDirty: false,
+		doublePressReviewShortcuts: true,
+		presentSingleAsMulti: true,
+		showFooterHints: true,
+	});
+	assert.deepEqual(result.config.keymaps, raw.keymaps);
+	assert.deepEqual(result.config.notifications, raw.notifications);
+	assert.deepEqual(raw, original);
+});
+
 test("config migration preserves a configured custom answer binding", () => {
-	for (const schemaVersion of [6, 7]) {
+	for (const schemaVersion of [6, 7, 8]) {
 		const keymaps = {
 			...DEFAULT_ASK_CONFIG.keymaps,
 			main: {
@@ -199,7 +246,7 @@ test("config migration preserves a configured custom answer binding", () => {
 			schemaVersion,
 		});
 
-		assert.equal(result.migrated, schemaVersion === 6);
+		assert.equal(result.migrated, schemaVersion !== 8);
 		assert.equal(result.notice, undefined);
 		assert.deepEqual(result.config.keymaps, keymaps);
 	}

@@ -3,7 +3,7 @@
 # @jopqior/pi-ask
 
 [![npm downloads](https://badgen.net/npm/dm/@jopqior/pi-ask)](https://www.npmjs.com/package/@jopqior/pi-ask)
-[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=e5eea656c55f5acdd7274a7340ca5580867c6aac)](https://github.com/Jopqior/pi-ask/commits/main)
+[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=8ee807cc02facc73c2207daad8afb4bfb8248ac4)](https://github.com/Jopqior/pi-ask/commits/main)
 [![stars](https://badgen.net/github/stars/Jopqior/pi-ask)](https://github.com/Jopqior/pi-ask/stargazers)
 
 > [!IMPORTANT]
@@ -79,7 +79,7 @@ Attach clarification notes to a specific option (`n`) or add broader question-le
 | ![Option note editor with note text for selected option](docs/media/feature-option-note.png) | ![Question-level note editor with saved note](docs/media/feature-question-note.png) |
 
 ### Review tab — Elaborate and Submit
-Ask the agent to elaborate on notes before finalizing choices, or review all answers before returning them to the agent.
+Answering the last question always opens Review; answers are never auto-submitted. Choose Submit explicitly, or ask the agent to elaborate on notes before finalizing choices.
 
 | Elaborate | Submit |
 |---|---|
@@ -136,13 +136,14 @@ Review-tab shortcuts can optionally require the same number key twice via `behav
 
 You can edit the config file yourself, ask pi to edit it for you, or use `/ask-settings` to find the exact config path, toggle behaviour/notification settings, or reset config to defaults with a guarded double press. pi-ask treats the config file as user-owned: load-time migrations and invalid files are handled in memory without rewriting or backing up the file, and read-only/externally managed configs fail gracefully with a manual-edit message. Destructive type changes, dirty dismissal, review shortcuts, and settings reset keep independent confirmation guards; none can confirm another.
 
-Config versions 1–6 migrate to schema 7 in memory, adding `main.editCustomAnswer: ["c"]` only when missing and preserving existing bindings and other settings. A key collision triggers a warning and falls back to the full default keymaps while retaining valid behaviour and notification channels. Loading never rewrites the file; explicit saves use version 7.
+If your config contains `behaviour.autoSubmitWhenAnsweredWithoutNotes`, ask is blocked, including interrupted-form recovery. Manually delete the field from the file named in the error, then run `/reload` or restart pi; setting it to `false` is not enough. The file is left unchanged and defaults are not used to bypass this error.
+
+After that field is removed, config versions 1–7 migrate to schema 8 in memory, adding `main.editCustomAnswer: ["c"]` only when missing and preserving existing bindings and other settings. A key collision triggers a warning and falls back to the full default keymaps while retaining valid behaviour and notification channels. Loading never rewrites the file; explicit saves use version 8.
 
 ```json
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "behaviour": {
-    "autoSubmitWhenAnsweredWithoutNotes": false,
     "confirmDismissWhenDirty": true,
     "doublePressReviewShortcuts": true,
     "presentSingleAsMulti": false,

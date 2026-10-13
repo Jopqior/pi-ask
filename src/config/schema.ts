@@ -58,11 +58,10 @@ const AskConfigKeymapsSchema = Type.Object({
 	}),
 });
 
-export const AskConfigFileV7Schema = Type.Object({
-	schemaVersion: Type.Literal(7),
+export const AskConfigFileV8Schema = Type.Object({
+	schemaVersion: Type.Literal(8),
 	behaviour: Type.Optional(
 		Type.Object({
-			autoSubmitWhenAnsweredWithoutNotes: Type.Optional(Type.Boolean()),
 			confirmDismissWhenDirty: Type.Optional(Type.Boolean()),
 			doublePressReviewShortcuts: Type.Optional(Type.Boolean()),
 			presentSingleAsMulti: Type.Optional(Type.Boolean()),
@@ -78,7 +77,7 @@ export const AskConfigFileV7Schema = Type.Object({
 	),
 });
 
-export type AskConfigFileV7 = Static<typeof AskConfigFileV7Schema>;
+export type AskConfigFileV8 = Static<typeof AskConfigFileV8Schema>;
 
 export type AskNotificationChannel =
 	| "bell"
@@ -130,7 +129,6 @@ export interface AskConfigKeymaps {
 
 export interface AskConfig {
 	behaviour: {
-		autoSubmitWhenAnsweredWithoutNotes: boolean;
 		confirmDismissWhenDirty: boolean;
 		doublePressReviewShortcuts: boolean;
 		presentSingleAsMulti: boolean;
@@ -143,4 +141,4 @@ export interface AskConfig {
 	};
 }
 
-export const validateAskConfigFileV7 = Compile(AskConfigFileV7Schema);
+export const validateAskConfigFileV8 = Compile(AskConfigFileV8Schema);
