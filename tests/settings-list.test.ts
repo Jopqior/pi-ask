@@ -86,6 +86,16 @@ test("settings list renders behaviour settings and config path", () => {
 	assert.equal(text.includes("Saved"), false);
 });
 
+test("review shortcut setting advertises only Submit and Cancel", () => {
+	const list = createList();
+	list.handleInput("\x1b[B");
+	const text = list.render(200).join("\n");
+	assert(text.includes("pressing 1 or 2 twice"));
+	assert(text.includes("Submit or Cancel"));
+	assert(!text.includes("Elaborate"));
+	assert(!text.includes("1, 2, or 3"));
+});
+
 test("settings list stays within narrow render width", () => {
 	const list = createList();
 	const lines = list.render(28);
@@ -239,4 +249,29 @@ test("settings list closes with configured keys and dispose idempotently", () =>
 	list.handleInput("\u0003");
 	list.dispose();
 	assert.equal(closed, 1);
+});
+
+test("double-press review setting stays independent of dirty-dismiss and preserves Elaborate keymap", async () => {
+	let saved: AskConfig | undefined;
+	const list = createList({
+		savedConfig: {
+			...savedConfig,
+			behaviour: { ...savedConfig.behaviour, confirmDismissWhenDirty: false },
+			keymaps: {
+				...savedConfig.keymaps,
+				main: { ...savedConfig.keymaps.main, toggleElaborate: ["ctrl+e"] },
+			},
+		},
+		onSave: (config) => {
+			saved = config;
+			return Promise.resolve(config);
+		},
+	});
+	list.handleInput("\x1b[B");
+	list.handleInput(" ");
+	await new Promise((resolve) => setImmediate(resolve));
+
+	assert.equal(saved?.behaviour.doublePressReviewShortcuts, false);
+	assert.equal(saved?.behaviour.confirmDismissWhenDirty, false);
+	assert.deepEqual(saved?.keymaps.main.toggleElaborate, ["ctrl+e"]);
 });

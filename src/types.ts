@@ -13,6 +13,7 @@ export interface AskQuestionInput {
 	label?: string;
 	options: AskOption[];
 	prompt: string;
+	/** @deprecated Accepted for legacy input only; ignored. */
 	required?: boolean;
 	type?: AskQuestionType;
 }
@@ -37,7 +38,6 @@ export interface AskQuestion
 	label: string;
 	presentedType?: AskQuestionType;
 	requestedType?: AskQuestionType;
-	required: boolean;
 	type: AskQuestionType;
 }
 
@@ -47,9 +47,12 @@ export interface AskSelectedOption {
 	value: string;
 }
 
+export type AskAnswerIntent = "answer" | "elaborate";
+
 export interface AskStateAnswer {
 	customSelected?: boolean;
 	customText?: string;
+	intent?: AskAnswerIntent;
 	note?: string;
 	optionNotes?: Record<string, string>;
 	selected: AskSelectedOption[];
@@ -62,6 +65,10 @@ export interface AskResultAnswer {
 	note?: string;
 	optionNotes?: Record<string, string>;
 	values: string[];
+}
+
+export interface AskResultV2Answer extends AskResultAnswer {
+	intent: AskAnswerIntent;
 }
 
 export interface AskQuestionSummary {
@@ -120,7 +127,20 @@ export interface AskContinuationPayload {
 	strategy: "refine_only" | "resume";
 }
 
-export interface AskResult {
+export interface AskResultV2Question extends AskQuestionSummary {
+	options: AskOption[];
+}
+
+export interface AskResultV2 {
+	answers: Record<string, AskResultV2Answer>;
+	cancelled: boolean;
+	error?: AskValidationError;
+	questions: AskResultV2Question[];
+	title?: string;
+	version: 2;
+}
+
+export interface LegacyAskResult {
 	answers: Record<string, AskResultAnswer>;
 	cancelled: boolean;
 	continuation?: AskContinuationPayload;
@@ -130,6 +150,8 @@ export interface AskResult {
 	questions: AskQuestionSummary[];
 	title?: string;
 }
+
+export type AskResult = LegacyAskResult | AskResultV2;
 
 export type ViewState =
 	| { kind: "navigate" }
@@ -146,6 +168,7 @@ export interface AskState {
 	completed: boolean;
 	mode: "submit" | "elaborate";
 	questions: AskQuestion[];
+	resultProtocol?: "legacy";
 	title?: string;
 	view: ViewState;
 }
@@ -162,6 +185,7 @@ export type AskAction =
 	| { type: "OPEN_OPTION_NOTE"; questionId: string; optionValue: string }
 	| { type: "CONFIRM" }
 	| { type: "TOGGLE_MULTI" }
+	| { type: "TOGGLE_QUESTION_ELABORATE" }
 	| { type: "NUMBER_SHORTCUT"; digit: number }
 	| { type: "SAVE_INPUT"; value: string }
 	| { type: "SAVE_NOTE"; value: string }

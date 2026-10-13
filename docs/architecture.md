@@ -30,7 +30,8 @@ The codebase is split so the implementation reads through file boundaries and na
 - `src/state/answers.ts` — mutate and serialize answers
 - `src/state/selectors.ts` — read-only selectors
 - `src/state/transitions.ts` — navigation, selection, notes, input, submit, cancel
-- `src/state/result.ts` — convert UI state to `AskResult`
+- `src/state/result.ts` — serialize new TUI state to version 2 results and review summaries
+- `src/state/legacy-result.ts` — isolated legacy result serialization for the unmigrated remote boundary
 - `src/state/view.ts` — view-mode helpers
 - `src/state.ts` — state barrel used by UI and tests
 
@@ -54,7 +55,8 @@ The codebase is split so the implementation reads through file boundaries and na
 ### Result formatting
 
 - `src/result-format.ts` — shared summary/result line formatting
-- `src/result.ts` — final result rendering
+- `src/result.ts` — basic version 2 and read-only legacy result rendering
+- `src/result-validation.ts` — validate persisted result shapes before rendering, rejecting unknown versions and malformed data
 - `src/text.ts` / `src/constants.ts` — shared display strings
 
 ### Tests
@@ -66,7 +68,12 @@ The codebase is split so the implementation reads through file boundaries and na
 
 ## Invariants worth preserving
 
-- submit is never blocked by unanswered questions
+- normal and recovered TUI submit requires every question to have a valid declared selection or selected nonblank custom answer; notes, Elaborate alone, and deselected custom drafts do not count
+- Review has only Submit/Cancel, labels questions Answered/Tentative · Elaborate/Unanswered, and keeps the missing-answer warning visible until all questions are answered
+- per-question intent is explicit and independent of selections, notes, custom editing, navigation, and presentation changes
+- version 2 results use `answers[id].intent` and contain no global `mode`, `continuation`, or `elaboration`
+- version 2 cancellation always clears serialized answers and is never blocked by missing answers
+- legacy input `required` is accepted and ignored; it is absent from the model-visible schema and normalized questions
 - advancing from the final question opens Review; state transitions and live settings updates never auto-submit
 - single-select answers serialize as arrays
 - single-select (including preview) digits select idempotently without advancing, Space toggles without advancing, and Enter selects/confirms then advances; multi-select digits/Space toggle and Enter advances without changing selections
@@ -76,29 +83,34 @@ The codebase is split so the implementation reads through file boundaries and na
 - multi-select free-form answers augment selected options instead of clearing them
 - preview questions keep their preview-pane behavior while also supporting the synthetic custom-answer option
 - deselected option notes stay in UI state
-- only selected option notes are emitted in the final result
+- version 2 results retain every question/option note and full declared question/option context; unselected-option notes remain associated by option value
+- historical unversioned results are read-only and retain legacy global-mode/partial-answer semantics; rendering never infers per-question intent
+- result version/shape validation guards persisted details; unknown versions and malformed data never render as version 2 success
+- version 2 text is basic display only; complete contextual text, disambiguation, and model guidance are deferred
 - editor lifecycle stays in the controller, not in the reducers
 - custom-row focus opens the editor only when text is empty; saved custom text reopens only through `main.editCustomAnswer` (default `c`), gated and hinted by the focused saved custom row
 - saving custom input returns to navigation on the same question with the custom row focused; confirming saved text never overwrites it or reselects a deselected multi-select draft
-- editor input keeps `c` as text and preserves native completion
+- editor input keeps `c` and `e` as text and preserves native completion
 - destructive type changes, dirty dismissal, review double presses, and settings reset keep independent confirmation state; no action can satisfy another guard
 - persisted ask settings are migrated to the current schema version in memory, validated, and normalized before use without rewriting the config file on load
 - the migration boundary rejects any presence of `behaviour.autoSubmitWhenAnsweredWithoutNotes` before upgrading versions; the store propagates this blocking error with the actual current/legacy source path instead of loading defaults, so both normal tool calls and recovery fail before opening a flow
-- after that check passes, config schema versions 1–7 migrate to version 8 in memory, preserving existing bindings and other settings, adding missing `main.editCustomAnswer: ["c"]`, and discarding the obsolete `answer` section; explicit saves write version 8
+- after that check passes, config schema versions 1–8 migrate to version 9 in memory, preserving existing bindings and other settings, adding missing `main.editCustomAnswer: ["c"]` and `main.toggleElaborate: ["e"]`, and discarding the obsolete `answer` section; explicit saves write version 9
+- recovery restores questions only, not saved answer drafts, and uses the same new TUI intent/validation/result rules
 - payload capture persists `ask:payload` entries with source `tool` only; recovery lookup scans only the current branch, revalidates payloads, and ignores obsolete non-tool entries
 - interrupted-ask recovery selects only the newest unresolved `ask_user` call on the active branch, prefers its valid persisted payload, and validates original arguments as fallback
 - recovered forms open only for TUI `startup`, `resume`, and `fork` events; the flow stays detached from the lifecycle handler
-- recovered submit, elaborate, and cancel persist dismissal before the same call can reopen; submit/elaborate deliver a user message, while cancel sends no message to the agent
+- recovered submit and cancel persist dismissal before the same call can reopen; submit delivers a version 2 user message, while cancel sends no message to the agent
 - invalid persisted keymaps, including collisions introduced by migration, fall back to the full default keymaps with a warning for the current session without discarding valid behaviour or notification settings/channels
 - invalid notification channels are skipped and fall back to the default bell channel if none are valid
 - ask settings behaviour and notification enabled changes attempt to persist immediately from the settings list; save failures revert the change and show an error; config reset is guarded by a short double-press confirmation
 - `presentSingleAsMulti` is applied at ask-flow creation; toggling it does not rewrite already-normalized questions in an open flow
 - `main.changeQuestionType` changes the active question type live (non-preview: `single <-> multi`; preview: `preview <-> multi`) and may require confirmation before destructive multi-to-single conversion
-- when the ask config file is missing, the first ask use attempts to write a default persisted config snapshot under `~/.pi/agent/extensions/`; if writing fails, built-in defaults are used for the session
+- when no current or legacy config file exists, built-in defaults load in memory; reads never create files, and only explicit saves persist config
 - legacy root config files are read as a fallback only when the current config file is absent; disk is left untouched
 - invalid config files are left untouched; defaults are loaded for the session with a notice except for the removed-field blocking error
 - live config updates can affect an in-progress ask flow immediately
 - remote lifecycle sources are only `tool` and `ask:resume`
+- remote submissions remain on their legacy protocol/serializer until the remote migration ticket; global mode is never guessed into per-question intent
 - remote ask submissions must be explicit `answer` or `cancel` responses; pi-ask validates ids/values but never infers approve/deny semantics from labels or option values
 
 ## Documentation rule

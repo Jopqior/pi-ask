@@ -14,7 +14,6 @@ This document defines the stable external behavior. It does not explain internal
     label?: string;
     prompt: string;
     type?: "single" | "multi" | "preview";
-    required?: boolean;
     options: Array<{
       value: string;
       label: string;
@@ -39,168 +38,73 @@ This document defines the stable external behavior. It does not explain internal
 - `recommended` is optional presentation metadata; zero, one, or multiple options may set it to `true`
 - recommended options render warning-colored `(recommended)` followed by muted ` | <description>`, or only `(recommended)` when no description exists, but are not preselected
 - `type` defaults to `single`
-- `required` defaults to `false`
-- `required` is metadata only; it never blocks submission
+- `required` is removed from the model-visible schema; legacy calls and stored questions may still carry it, but it is accepted and ignored
+- new and recovered forms require valid answers for every question regardless of legacy `required` values
 - preview questions require preview text for every declared option; option descriptions do not satisfy this requirement, and invalid preview payloads report a fix hint to add preview text or switch to `type: "single"`
 - all questions get an internal `Type your own` option
 
-## Output
+## Output (version 2)
+
+Normal tool and recovered TUI flows return this result in `details`, alongside `content: [{ type: "text", text: string }]`:
 
 ```ts
 {
-  content: [{ type: "text"; text: string }];
-  details: {
-    title?: string;
-    cancelled: boolean;
-    error?: {
-      kind: "invalid_input";
-      issues: Array<{
-        path: string;
-        message: string;
-      }>;
-    };
-    mode: "submit" | "elaborate";
-    questions: Array<{
-      id: string;
-      label: string;
-      prompt: string;
-      type: "single" | "multi" | "preview";
-      presentedType?: "single" | "multi" | "preview";
-    }>;
-    answers: Record<
-      string,
-      {
-        values: string[];
-        labels: string[];
-        indices: number[];
-        customText?: string;
-        note?: string;
-        optionNotes?: Record<string, string>;
-      }
-    >;
-    continuation?: {
-      strategy: "refine_only" | "resume";
-      affectedQuestionIds: string[];
-      preservedAnswers: Record<string, {
-        values: string[];
-        labels: string[];
-        indices: number[];
-        customText?: string;
-        note?: string;
-        optionNotes?: Record<string, string>;
-      }>;
-      questionStates: Record<string, {
-        status: "answered" | "needs_clarification" | "unanswered";
-      }>;
-    };
-    elaboration?: {
-      instruction: string;
-      nextAction: "clarify" | "clarify_then_reask";
-      items: Array<
-        | {
-            target: { kind: "question" };
-            question: {
-              id: string;
-              label: string;
-              prompt: string;
-              type: "single" | "multi" | "preview";
-              presentedType?: "single" | "multi" | "preview";
-              options: Array<{
-                value: string;
-                label: string;
-                description?: string;
-                preview?: string;
-                recommended?: boolean;
-              }>;
-            };
-            answered: boolean;
-            answer?: {
-              values: string[];
-              labels: string[];
-              indices: number[];
-              customText?: string;
-              note?: string;
-              optionNotes?: Record<string, string>;
-            };
-            note: string;
-          }
-        | {
-            target: { kind: "option"; optionValue: string };
-            question: {
-              id: string;
-              label: string;
-              prompt: string;
-              type: "single" | "multi" | "preview";
-              presentedType?: "single" | "multi" | "preview";
-              options: Array<{
-                value: string;
-                label: string;
-                description?: string;
-                preview?: string;
-                recommended?: boolean;
-              }>;
-            };
-            option: {
-              value: string;
-              label: string;
-              description?: string;
-              preview?: string;
-              recommended?: boolean;
-            };
-            selected: boolean;
-            answered: boolean;
-            answer?: {
-              values: string[];
-              labels: string[];
-              indices: number[];
-              customText?: string;
-              note?: string;
-              optionNotes?: Record<string, string>;
-            };
-            note: string;
-          }
-      >;
-    };
+  version: 2;
+  title?: string;
+  cancelled: boolean;
+  error?: {
+    kind: "invalid_input";
+    issues: Array<{ path: string; message: string }>;
   };
+  questions: Array<{
+    id: string;
+    label: string;
+    prompt: string;
+    type: "single" | "multi" | "preview";
+    presentedType?: "single" | "multi" | "preview";
+    options: Array<{
+      value: string;
+      label: string;
+      description?: string;
+      preview?: string;
+      recommended?: boolean;
+    }>;
+  }>;
+  answers: Record<string, {
+    intent: "answer" | "elaborate";
+    values: string[];
+    labels: string[];
+    indices: number[];
+    customText?: string;
+    note?: string;
+    optionNotes?: Record<string, string>;
+  }>;
 }
 ```
 
 ## Output rules
 
-- `cancelled: true` means the user dismissed the flow, UI was unavailable, or the payload was invalid before UI opened
-- semantically invalid payloads that reach tool execution return `error.kind === "invalid_input"` with structured `issues` and a transcript-friendly `Invalid ask_user payload:` message; their rendered status is `Invalid tool payload`
-- payloads missing schema-required fields fail Pi's schema validation before tool execution and use Pi's standard tool-error result without structured `details`
-- `mode: "submit"` is normal completion; `mode: "elaborate"` means the user asked the agent to continue with follow-up clarification based on notes
-- unanswered questions without notes are omitted from `answers`; note-only entries remain in `answers` to carry their notes, but all non-cancelled submitted result text includes `<label>: (no answer)` in summary mode and `? <label>: (no answer)` in transcript rendering
-- in `mode: "elaborate"`, `answers` contains only committed answers; note-only entries move to `elaboration.items`
-- `continuation.strategy === "refine_only"` means the next ask should refine the current flow rather than restart it
-- `continuation.preservedAnswers` contains previously committed answers that should be kept as context and not re-asked
-- `continuation.affectedQuestionIds` lists the only questions that should be revisited
-- `continuation.questionStates` marks each question as `answered`, `needs_clarification`, or `unanswered`
-- single-select answers still use arrays
-- recommendation markers never change canonical submitted labels or values
-- when `behaviour.presentSingleAsMulti` is enabled, requested single-select questions are presented and handled as multi-select in new/recovered ask flows; result question metadata keeps the requested `type`, adds `presentedType` when final presentation differs, and result text uses one compact note when any answered questions were presented differently
-- `indices` are 1-based rendered option positions
-- `customText` stores the free-form answer
-- on single-select questions, saving free-form text clears selected options for that question
-- on multi-select questions, `values` and `labels` include both selected options and `customText` when both are present
-- on multi-select questions, selected options keep their original order and `customText` is appended last
-- saving free-form text stays on the same question tab with the custom row focused and selected; deselecting saved custom text retains the draft but omits it from the result
-- on multi-select questions, toggling an empty custom row opens the free-form editor, while toggling a custom row with saved free-form text selects or deselects it without opening the editor or clearing the text
-- saving or clearing free-form text on a multi-select question does not clear other selected options
-- `note` stores a question-level note
-- `optionNotes` includes only notes for selected options
-- question notes may exist without a selected answer
-- `elaboration.items` includes all question notes and all option notes, even for unselected options
-- every elaboration item includes the full normalized question and option list for that question so referential notes like `above` remain understandable to the agent
-- option-targeted elaboration items include the specific noted option plus whether it is currently selected
-- question-targeted elaboration items include whether the question already has a committed answer
-- `elaboration.instruction` tells the agent to answer the clarification directly first, then re-ask only the affected questions if a choice is still needed
-- after clarification, agents should prefer another structured follow-up over plain-text multiple choice when a decision is still unresolved
-- once prior answers narrow the branch, agents should bundle the next 2-3 related unresolved questions into one follow-up ask when possible, instead of using a long sequence of single-question asks
-- `elaboration` is only present when `mode === "elaborate"`
-- elaborate `content` text and transcript rendering describe each note directly using the full question prompt and option label, and include the current committed answer text when available, instead of a generic elaboration banner
-- when the user selects `Elaborate` without adding notes, elaborate `content` text and transcript rendering still include the committed answer text so the agent can elaborate on that answer directly
+- `intent: "answer"` is an ordinary answer; `intent: "elaborate"` marks the selected content as tentative explanation context, not a final decision
+- intent is independent per question; notes, selections, editing, navigation, and type changes never infer or change it
+- version 2 has no global `mode`, `continuation`, or `elaboration` fields
+- successful TUI submission includes a valid answer for every question; only notes, only Elaborate, or a deselected custom draft cannot satisfy submission
+- `questions` retains every normalized prompt and the full declared option list, including descriptions, previews, and recommendation metadata, as explanation background
+- `answers` retains all question notes and all option notes, including notes on unselected options, for ordinary and tentative answers alike
+- `optionNotes` is keyed by declared option value; selected option indices identify which declared options are selected, independently of notes and custom text
+- single-select answers still use arrays; recommendation markers never change canonical labels or values
+- result metadata keeps the requested `type` and adds `presentedType` when final presentation differs; basic result text uses one compact note when answered questions were presented differently
+- `indices` are 1-based declared option positions; the synthetic custom answer has no index
+- `customText` stores selected free-form text; on single-select it replaces declared selections, while on multi-select it augments them and is appended last to `values` and `labels`
+- saving custom text stays on the current question with the custom row selected and focused; deselecting saved text keeps a UI draft but omits it from the result
+- saving or clearing multi-select custom text does not clear other selections
+- `cancelled: true` means dismissal, unavailable UI, or invalid input before UI opened; version 2 cancellation always has `answers: {}` and never delivers draft selections, custom text, or notes
+- cancellation may retain normalized question metadata and validation errors; it is not subject to all-questions-answered validation
+- semantically invalid payloads return `error.kind === "invalid_input"`, structured `issues`, and a transcript-friendly `Invalid ask_user payload:` message; rendered status is `Invalid tool payload`
+- missing schema-required fields fail Pi validation before execution and use Pi's standard tool-error result without structured `details`
+
+Version 2 text currently shows basic answers, ordinary/tentative intent, and notes (including unselected-option notes). Complete contextual text, identity/source disambiguation, and model follow-up instructions are deferred to later tickets; the full structured context is already retained in `details`.
+
+Unversioned historical results remain read-only legacy results: their global `mode`, answers, notes, and unanswered states keep the old semantics. Never infer per-question intent from legacy mode or notes. Unknown versions or malformed results fall back safely rather than rendering as successful version 2 results. Remote submissions remain legacy until the remote upgrade ticket. See [`interface-upgrade.md`](interface-upgrade.md).
 
 ## Supported UX
 
@@ -213,9 +117,11 @@ This document defines the stable external behavior. It does not explain internal
 - question notes via `Shift+N`
 - option notes via `n`
 - number-key quick selection
-- submit/elaborate/cancel review tab; advancing from the final question always opens Review without submitting, even when all questions are answered and there are no notes
-- on the review tab, `Submit` and `Cancel` preview notes only for answered questions
-- on the review tab, `Elaborate` preview expands to all question notes and all option notes, including notes on unselected options
+- explicit per-question Elaborate toggle via `main.toggleElaborate` (default `e`), available with or without notes
+- Submit/Cancel Review tab; advancing from the final question always opens Review without submitting
+- Review labels questions `Answered`, `Tentative · Elaborate`, or `Unanswered` and shows all saved question/option notes
+- the missing-answer warning remains visible while any question is unanswered
+- Submit stays in Review and lists missing questions unless every question has a valid declared selection or selected nonblank custom answer; Cancel remains available
 - transcript-friendly call and result rendering
 - automatic recovery of the newest unresolved `ask_user` form on startup, resume, or fork
 - ask settings list with binary behaviour/notification toggles and a guarded reset-to-defaults action
@@ -223,7 +129,6 @@ This document defines the stable external behavior. It does not explain internal
 - settings attempt to persist immediately when changed: `Confirm dismiss when dirty`, `Double-press review shortcuts`, `Notifications`, and `Show footer hints`; `Present single-select as multi-select` persists immediately when saving succeeds but applies only to new/recovered ask flows; save failures revert the setting and show a manual-edit message; resetting config to defaults requires pressing the reset action twice within a short confirmation window
 - `Keymaps` is a persisted, context-aware config section for global, main-flow, editor, note-editor, and settings-modal actions
 - the settings list shows the absolute config file path for customizing keymaps and notifications
-- elaborate results are phrased as direct follow-up instructions, for example: `User asked to elaborate on question "Which option would you like to select?" option "Option A" with note "why this one?"`
 
 ## Keyboard behavior
 
@@ -241,9 +146,10 @@ Main flow:
 - on single-select (including preview), `Enter` on saved custom text confirms it and advances without overwriting it; digits select it idempotently and `Space` toggles it
 - on multi-select, digits/`Space` toggle saved custom text; `Enter` advances without reselecting a deselected draft
 - `main.changeQuestionType` changes the active question type (non-preview: `single <-> multi`; preview: `preview <-> multi`); default: `t`; destructive `multi -> single` changes require pressing the type hotkey again, with no timeout, and the pending confirmation clears on other navigation/actions
+- `main.toggleElaborate` toggles the active question's intent without changing its answer; default: `e`; the question view displays `Elaborate: on` or `Elaborate: off`, even without notes
 - `main.optionNote` and `main.questionNote` open option/question notes; defaults: `n`, `Shift+N`
-- `1..9` is fixed and selects or toggles the matching option; on the review tab, `1`, `2`, and `3` trigger `Submit`, `Elaborate`, and `Cancel`
-- when `Double-press review shortcuts` is enabled, review-tab `1`, `2`, and `3` require the same key twice without a timeout, and the review screen shows an inline hint for the pending action
+- `1..9` is fixed and selects or toggles the matching option; on Review, `1` triggers Submit, `2` triggers Cancel, and `3` does nothing
+- when `Double-press review shortcuts` is enabled, review-tab `1` and `2` require the same key twice without a timeout, and the review screen shows an inline hint for the pending action
 
 Editing flow:
 
@@ -254,7 +160,7 @@ Editing flow:
 - `global.settings` opens ask settings when the editor is empty; otherwise the key is delegated to the editor as text/input
 - when editor has text, arrow keys and `Tab` stay in the editor so the cursor can move while typing
 - when editor is empty, editor-context `*WhenEmpty` navigation actions move options or tabs without requiring the editor close binding first
-- `c` is ordinary text inside editors; native completion and the fixed `@` file-reference affordance remain available
+- `c` and `e` are ordinary text inside editors; native completion and the fixed `@` file-reference affordance remain available
 
 Settings modal:
 
@@ -273,10 +179,10 @@ Destructive type changes, dirty dismissal, review double presses, and settings r
 
 - any config containing `behaviour.autoSubmitWhenAnsweredWithoutNotes` blocks ask before migration, regardless of the field value (including `false`); the error names the actual current or legacy source path and requires manual field removal followed by `/reload` or restart, with no fallback to defaults
 - this blocking rule applies to normal tool calls in every mode and interrupted-form recovery; blocked recovery does not dismiss the pending call or deliver an answer
-- current persisted schema is version 8; explicit saves write version 8
-- after the removed-field check passes, versions 1–7 migrate in memory, adding missing `main.editCustomAnswer: ["c"]` while preserving existing bindings and other settings; obsolete `answer` settings remain discarded
+- current persisted schema is version 9; explicit saves write version 9
+- after the removed-field check passes, versions 1–8 migrate in memory, adding missing `main.editCustomAnswer: ["c"]` and `main.toggleElaborate: ["e"]` while preserving existing bindings and other settings; obsolete `answer` settings remain discarded
 - invalid keymaps, including collisions introduced by the new default binding, fall back to the full default keymaps with a warning while preserving valid behaviour and notification settings/channels
-- loading or migrating never rewrites the config file
+- loading or migrating never writes or creates a config file; if neither current nor legacy config exists, built-in defaults are used in memory until an explicit save
 
 ## Non-TUI and non-interactive modes
 
@@ -301,6 +207,8 @@ Channels:
 - `@eko24ive/pi-ask:submit`
 - `@eko24ive/pi-ask:submit-result`
 
+The remote submission boundary still uses the legacy event/result protocol and global mode semantics; it does not translate them into per-question intent. Its version 2 migration and full-answer validation are deferred.
+
 Remote submissions must be explicit `{ kind: "answer" }` or `{ kind: "cancel" }` responses. Remote answers use question ids and normalized option values from the started event. pi-ask validates ids and values, recomputes labels/indices, and does not infer approval semantics from labels.
 
 See [`remote-events.md`](remote-events.md) for payload shapes, examples, and a local smoke test.
@@ -315,9 +223,10 @@ See [`remote-events.md`](remote-events.md) for payload shapes, examples, and a l
 - on `session_start` with reason `startup`, `resume`, or `fork`, pi-ask finds the newest `ask_user` tool call on the active branch that has neither a tool result nor an `ask:pending-dismissed` entry
 - recovery does not run for `new`, `reload`, or non-TUI sessions
 - the matching valid `ask:payload` supplies the form; if it is missing or invalid, pi-ask validates and uses the original tool call arguments instead
+- recovery stores questions only, never answer drafts; old `required` fields are ignored and reopening applies the same per-question intent, Review validation, and version 2 result rules as a new TUI flow
 - the recovery flow is detached from `session_start`, so an open form does not block other lifecycle handlers
-- because the interrupted `execute` promise no longer exists, submit or elaborate sends the result as a normal user message, queued as a follow-up if the agent is busy
-- submit, elaborate, and cancel append `ask:pending-dismissed` for that tool call, preventing it from automatically reopening again; cancel sends no message to the agent
+- because the interrupted `execute` promise no longer exists, submit sends the version 2 result as a normal user message, queued as a follow-up if the agent is busy
+- submit and cancel append `ask:pending-dismissed` for that tool call, preventing it from automatically reopening again; cancel sends no message to the agent
 - remote lifecycle sources are only `tool` for live tool execution and `ask:resume` for recovered flows
 
 The fallback message includes normalized pending questions and options so the caller can re-ask them manually. `details.questions` still contains normalized question metadata, while `details.answers` stays empty until a user responds.

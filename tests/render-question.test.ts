@@ -169,7 +169,12 @@ test("open question note renders inline label and editor", () => {
 	const inputIndex = lines.findIndex((line) => line.includes("Add a note..."));
 
 	assert.notEqual(promptIndex, -1);
-	assert.equal(inputIndex, promptIndex + 1);
+	assert(inputIndex > promptIndex);
+	assert(
+		lines
+			.slice(promptIndex + 1, inputIndex)
+			.some((line) => line.includes("Elaborate: off"))
+	);
 	assert(!lines.some((line) => line.includes("Note:")));
 });
 

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderResultText } from "../src/result.ts";
 import { createInitialState } from "../src/state/create.ts";
-import { summarizeResult, toAskResult } from "../src/state/result.ts";
+import {
+	toAskResult as serializeResult,
+	summarizeResult,
+} from "../src/state/result.ts";
 import {
 	applyNumberShortcut,
 	confirmCurrentSelection,
@@ -14,6 +17,19 @@ import {
 	submitCustomAnswer,
 	toggleCurrentMultiOption,
 } from "../src/state/transitions.ts";
+
+// Historical versionless results remain readable with their original semantics.
+function toAskResult(state: ReturnType<typeof createInitialState>) {
+	const result = serializeResult({ ...state, resultProtocol: "legacy" });
+	if ("version" in result) {
+		throw new Error("Expected legacy result");
+	}
+	return result;
+}
+
+function withLegacyHeader(text: string): string {
+	return `Legacy ask_user result (read-only)\n${text}`;
+}
 
 test("summarizeResult formats selected answers", () => {
 	let state = createInitialState({
@@ -34,7 +50,7 @@ test("summarizeResult formats selected answers", () => {
 	const result = toAskResult(state);
 
 	assert.equal(summarizeResult(result), "Style: Rich");
-	assert.equal(renderResultText(result), "✓ Style: Rich");
+	assert.equal(renderResultText(result), withLegacyHeader("✓ Style: Rich"));
 });
 
 test("submitted results surface unanswered questions without serializing answers", () => {
@@ -68,7 +84,7 @@ test("submitted results surface unanswered questions without serializing answers
 	);
 	assert.equal(
 		renderResultText(result),
-		"✓ Architecture: Encrypted\n? Secret sources: (no answer)"
+		withLegacyHeader("✓ Architecture: Encrypted\n? Secret sources: (no answer)")
 	);
 });
 
@@ -98,7 +114,7 @@ test("submitted results surface every question when all are unanswered", () => {
 	);
 	assert.equal(
 		renderResultText(result),
-		"? Scope: (no answer)\n? Tests: (no answer)"
+		withLegacyHeader("? Scope: (no answer)\n? Tests: (no answer)")
 	);
 });
 
@@ -140,7 +156,9 @@ test("single questions presented as multi preserve requested type in results", (
 	);
 	assert.equal(
 		renderResultText(result),
-		"✓ Scope: Docs, Tests\n  Note: Some questions were presented as multi-select by user preference."
+		withLegacyHeader(
+			"✓ Scope: Docs, Tests\n  Note: Some questions were presented as multi-select by user preference."
+		)
 	);
 });
 
@@ -219,7 +237,7 @@ test("summaries include custom text answers", () => {
 	assert.equal(summarizeResult(result), "Notes: Please include examples");
 	assert.equal(
 		renderResultText(result),
-		"✓ Notes: (wrote) Please include examples"
+		withLegacyHeader("✓ Notes: (wrote) Please include examples")
 	);
 });
 
@@ -253,7 +271,10 @@ test("multi-select summaries include selected options and custom text", () => {
 		optionNotes: undefined,
 	});
 	assert.equal(summarizeResult(result), "Frameworks: React, SolidStart");
-	assert.equal(renderResultText(result), "✓ Frameworks: React, SolidStart");
+	assert.equal(
+		renderResultText(result),
+		withLegacyHeader("✓ Frameworks: React, SolidStart")
+	);
 });
 
 test("summaries and result text include question and selected option notes", () => {
@@ -288,11 +309,13 @@ test("summaries and result text include question and selected option notes", () 
 	);
 	assert.equal(
 		renderResultText(result),
-		[
-			"✓ Framework: Vue",
-			"  note: Need SSR support",
-			"  Vue note: Team has prior experience",
-		].join("\n")
+		withLegacyHeader(
+			[
+				"✓ Framework: Vue",
+				"  note: Need SSR support",
+				"  Vue note: Team has prior experience",
+			].join("\n")
+		)
 	);
 });
 
@@ -317,7 +340,7 @@ test("unselected option notes are omitted from the submitted result", () => {
 	const result = toAskResult(state);
 
 	assert.equal(result.answers.framework.optionNotes, undefined);
-	assert.equal(renderResultText(result), "✓ Framework: Vue");
+	assert.equal(renderResultText(result), withLegacyHeader("✓ Framework: Vue"));
 });
 
 test("question-note-only results still render note content", () => {
@@ -345,7 +368,7 @@ test("question-note-only results still render note content", () => {
 
 	assert.equal(
 		renderResultText(result),
-		"? Scope: (no answer)\n  note: Prefer incremental changes"
+		withLegacyHeader("? Scope: (no answer)\n  note: Prefer incremental changes")
 	);
 	assert.equal(
 		summarizeResult(result),
@@ -438,10 +461,12 @@ test("elaborate results include unselected notes in summary and render output", 
 	);
 	assert.equal(
 		renderResultText(result),
-		[
-			'User asked to elaborate on question "Pick a framework" with note "Need SSR support"',
-			'User asked to elaborate on question "Pick a framework" option "React" with note "Legacy codebase"',
-		].join("\n")
+		withLegacyHeader(
+			[
+				'User asked to elaborate on question "Pick a framework" with note "Need SSR support"',
+				'User asked to elaborate on question "Pick a framework" option "React" with note "Legacy codebase"',
+			].join("\n")
+		)
 	);
 });
 
@@ -513,7 +538,9 @@ test("elaborate results keep committed answers alongside elaboration context", (
 	);
 	assert.equal(
 		renderResultText(result),
-		'User asked to elaborate on question "Pick a framework" after current answer "Vue" with note "Compare tradeoffs"'
+		withLegacyHeader(
+			'User asked to elaborate on question "Pick a framework" after current answer "Vue" with note "Compare tradeoffs"'
+		)
 	);
 });
 
@@ -545,7 +572,9 @@ test("elaboration summary includes custom answers in note context", () => {
 	);
 	assert.equal(
 		renderResultText(result),
-		'User asked to elaborate on question "Pick a framework" after current answer "SolidStart" with note "Compare tradeoffs"'
+		withLegacyHeader(
+			'User asked to elaborate on question "Pick a framework" after current answer "SolidStart" with note "Compare tradeoffs"'
+		)
 	);
 	assert.deepEqual(result.elaboration?.items[0]?.answer, {
 		values: ["SolidStart"],
@@ -583,7 +612,9 @@ test("elaboration summary includes answered custom text even without notes", () 
 	);
 	assert.equal(
 		renderResultText(result),
-		'User asked to elaborate on question "What kind of ask_user showcase would you like?" after current answer "teeeel meee whyyyyy"'
+		withLegacyHeader(
+			'User asked to elaborate on question "What kind of ask_user showcase would you like?" after current answer "teeeel meee whyyyyy"'
+		)
 	);
 	assert.deepEqual(result.elaboration?.items, []);
 });
@@ -677,7 +708,10 @@ test("invalid tool payload result is attributed to the tool call", () => {
 		},
 	};
 
-	assert.equal(renderResultText(result), "Invalid tool payload");
+	assert.equal(
+		renderResultText(result),
+		withLegacyHeader("Invalid tool payload")
+	);
 });
 
 test("cancelled result hides unanswered questions", () => {
@@ -697,5 +731,47 @@ test("cancelled result hides unanswered questions", () => {
 	};
 
 	assert.equal(summarizeResult(result), "User cancelled the ask flow");
-	assert.equal(renderResultText(result), "Cancelled");
+	assert.equal(renderResultText(result), withLegacyHeader("Cancelled"));
+});
+
+test("versionless results render with an explicit legacy read-only header without inferring intent", () => {
+	const result = {
+		cancelled: false,
+		mode: "submit" as const,
+		questions: [
+			{
+				id: "choice",
+				label: "Choice",
+				prompt: "Choose?",
+				type: "single" as const,
+			},
+		],
+		answers: {},
+	};
+	assert.equal(
+		renderResultText(result),
+		"Legacy ask_user result (read-only)\n? Choice: (no answer)"
+	);
+	assert.equal(summarizeResult(result), "Choice: (no answer)");
+});
+
+test("legacy read-only rendering treats inherited reserved ids as missing answers", () => {
+	const result = {
+		cancelled: false,
+		mode: "submit" as const,
+		questions: [
+			{
+				id: "__proto__",
+				label: "Reserved",
+				prompt: "Choose?",
+				type: "single" as const,
+			},
+		],
+		answers: {},
+	};
+	assert.equal(
+		renderResultText(result),
+		withLegacyHeader("? Reserved: (no answer)")
+	);
+	assert.equal(summarizeResult(result), "Reserved: (no answer)");
 });

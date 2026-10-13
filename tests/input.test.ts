@@ -3,6 +3,10 @@ import test from "node:test";
 import { Editor } from "@earendil-works/pi-tui";
 import { DEFAULT_ASK_CONFIG } from "../src/config/defaults.ts";
 import { getAskConfigStore } from "../src/config/store.ts";
+import {
+	getAskKeymaps,
+	renderFooterKeymaps,
+} from "../src/constants/keymaps.ts";
 import { createInitialState } from "../src/state/create.ts";
 import {
 	applyNumberShortcut,
@@ -494,4 +498,74 @@ test("custom configured note shortcuts are used at runtime", () => {
 	assert.deepEqual(getInputCommand(navigation, config, "X"), {
 		kind: "openQuestionNote",
 	});
+});
+
+test("Elaborate key toggles only the current question and is configurable", () => {
+	const state = createInitialState({
+		questions: [
+			{ id: "q1", prompt: "Question?", options: [{ value: "a", label: "A" }] },
+		],
+	});
+	assert.deepEqual(getInputCommand(state, DEFAULT_ASK_CONFIG, "e"), {
+		kind: "toggleQuestionElaborate",
+	});
+	const config = {
+		...DEFAULT_ASK_CONFIG,
+		keymaps: {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: { ...DEFAULT_ASK_CONFIG.keymaps.main, toggleElaborate: ["x"] },
+		},
+	};
+	assert.deepEqual(getInputCommand(state, config, "x"), {
+		kind: "toggleQuestionElaborate",
+	});
+	assert.deepEqual(getInputCommand(state, config, "e"), { kind: "ignore" });
+	assert.deepEqual(
+		getInputCommand(
+			{ ...state, activeTabIndex: 1, view: { kind: "submit" } },
+			config,
+			"x"
+		),
+		{ kind: "ignore" }
+	);
+});
+
+test("e remains ordinary text in custom answer and note editors", () => {
+	const state = inputState();
+	const noteState = enterQuestionNoteMode(state, "q1");
+	for (const editorState of [state, noteState]) {
+		for (const text of ["", "existing text"]) {
+			assert.deepEqual(
+				getInputCommand(editorState, DEFAULT_ASK_CONFIG, "e", text),
+				{
+					kind: "delegateToEditor",
+				}
+			);
+		}
+	}
+});
+
+test("question footer and keymap help expose configured Elaborate while Review offers digits 1 and 2", () => {
+	const config = {
+		...DEFAULT_ASK_CONFIG,
+		keymaps: {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: { ...DEFAULT_ASK_CONFIG.keymaps.main, toggleElaborate: ["x"] },
+		},
+	};
+	for (const context of ["default", "multi"] as const) {
+		assert(renderFooterKeymaps(config, context).includes("x elaborate"));
+	}
+	const binding = getAskKeymaps(config).customizable.find(
+		({ id }) => id === "main.toggleElaborate"
+	);
+	assert.deepEqual(binding?.keys, ["x"]);
+	assert.equal(binding?.description, "Toggle Elaborate for current question");
+	assert(renderFooterKeymaps(config, "submit").includes("1-2 hotkeys"));
+	for (const context of ["input", "note", "submit"] as const) {
+		assert.equal(
+			renderFooterKeymaps(config, context).includes("elaborate"),
+			false
+		);
+	}
 });

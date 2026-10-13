@@ -14,6 +14,7 @@ import {
 	type RemoteAskSubmitResultEvent,
 } from "../src/remote-ask.ts";
 import { createInitialState } from "../src/state/create.ts";
+import { toAskResult } from "../src/state/result.ts";
 import { runAskFlow } from "../src/ui/controller.ts";
 
 const UNKNOWN_APPROVE_VALUE_RE = /Unknown option value "approve"/;
@@ -313,3 +314,31 @@ function plainTheme() {
 		},
 	};
 }
+
+test("remote v1 opts into legacy results without inferring per-question intent", () => {
+	const state = createInitialState({
+		questions: [
+			{
+				id: "decision",
+				prompt: "Proceed?",
+				options: [{ value: "yes", label: "Yes" }],
+			},
+		],
+	});
+	state.answers.decision = {
+		selected: [],
+		intent: "elaborate",
+		note: "Old UI draft",
+	};
+	const response = applyRemoteAskResponse(state, {
+		kind: "answer",
+		answers: { decision: { values: ["yes"], note: "Context only" } },
+	});
+	assert.equal(response.ok, true);
+	assert.equal(response.state.resultProtocol, "legacy");
+	assert.equal(response.state.answers.decision.intent, undefined);
+	const result = toAskResult(response.state);
+	assert.equal("version" in result, false);
+	assert.equal("mode" in result && result.mode, "submit");
+	assert.equal("intent" in result.answers.decision, false);
+});

@@ -16,15 +16,15 @@ Default path:
 
 `~/.pi/agent/extensions/eko24ive-pi-ask.json`
 
-If the file does not exist yet, pi-ask attempts to create it with the current default settings the first time the ask flow is used. If the config location is read-only or managed outside pi-ask, pi-ask uses built-in defaults for the session and leaves disk unchanged.
+If neither the current nor legacy config file exists, pi-ask uses built-in defaults in memory. Loading never creates a config file; only an explicit save (for example, changing a setting or confirming reset) writes it. If saving fails because the location is read-only or externally managed, disk stays unchanged and the settings change is reverted.
 
 Older pi-ask versions wrote this file at `~/.pi/agent/eko24ive-pi-ask.json`. If that legacy file exists and the extensions config does not, pi-ask reads the legacy file as a fallback and leaves disk unchanged. If both files exist, pi-ask uses the extensions config and leaves the legacy root file untouched.
 
 ## Config versions and migrations
 
-`schemaVersion` identifies the persisted config shape; the current version is `8`. Before migration, pi-ask rejects any config containing `behaviour.autoSubmitWhenAnsweredWithoutNotes`, even when its value is `false`, `null`, or another non-boolean value. Ask is blocked in every mode, including interrupted-form recovery; it does not fall back to defaults. The error names the actual config file (including a legacy fallback file) and requires you to manually remove the field, then run `/reload` or restart pi. Loading leaves the file unchanged.
+`schemaVersion` identifies the persisted config shape; the current version is `9`. Before migration, pi-ask rejects any config containing `behaviour.autoSubmitWhenAnsweredWithoutNotes`, even when its value is `false`, `null`, or another non-boolean value. Ask is blocked in every mode, including interrupted-form recovery; it does not fall back to defaults. The error names the actual config file (including a legacy fallback file) and requires you to manually remove the field, then run `/reload` or restart pi. Loading leaves the file unchanged.
 
-Once that field is absent, versions `1`–`7` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section from versions `1`–`5`. Version `6` gains `main.editCustomAnswer: ["c"]` only when that action is missing; existing bindings are preserved. Loading never rewrites the file; an explicit save writes version `8`.
+Once that field is absent, versions `1`–`8` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section from versions `1`–`5`. Version `6` gains `main.editCustomAnswer: ["c"]` only when that action is missing; existing bindings are preserved. Version `8` gains `main.toggleElaborate: ["e"]` only when missing, also preserving existing bindings. Loading never rewrites the file; an explicit save writes version `9`.
 
 Other unsupported future versions or invalid files are left unchanged and defaults are loaded for the current session. Fix the file, then run `/reload` or restart pi.
 
@@ -32,7 +32,7 @@ Other unsupported future versions or invalid files are left unchanged and defaul
 
 ```json
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "behaviour": {
     "confirmDismissWhenDirty": true,
     "doublePressReviewShortcuts": true,
@@ -47,6 +47,7 @@ Other unsupported future versions or invalid files are left unchanged and defaul
       "toggle": ["space"],
       "changeQuestionType": ["t"],
       "editCustomAnswer": ["c"],
+      "toggleElaborate": ["e"],
       "nextTab": ["tab", "right"],
       "previousTab": ["shift+tab", "left"],
       "nextOption": ["down"],
@@ -86,7 +87,7 @@ Other unsupported future versions or invalid files are left unchanged and defaul
 
 ## Behaviour
 
-Answering the final question always opens Review. Submission requires an explicit review action; there is no auto-submit setting.
+Answering the final question always opens Review. Submission requires an explicit review action and a valid answer for every question; there is no auto-submit setting. Review offers only Submit and Cancel. Tentative answers count when they contain a valid selection or selected nonblank custom answer; notes or Elaborate alone do not. Review labels questions `Answered`, `Tentative · Elaborate`, or `Unanswered`, and keeps the missing-answer warning visible while any question is unanswered. Cancelling is not blocked by missing answers.
 
 ### `behaviour.confirmDismissWhenDirty`
 
@@ -100,7 +101,7 @@ Answering the final question always opens Review. Submission requires an explici
 
 - type: boolean
 - default: `true`
-- effect: when enabled, review-tab number shortcuts (`1`, `2`, `3`) only trigger after pressing the same key twice
+- effect: when enabled, review-tab `1` (Submit) and `2` (Cancel) only trigger after pressing the same key twice; `3` has no action
 - the review screen shows an inline hint and keeps the pending shortcut armed until another review shortcut is pressed or the user leaves the tab
 
 ### `behaviour.presentSingleAsMulti`
@@ -183,6 +184,7 @@ Arrays are aliases: any listed key triggers the same action.
     "cancel": ["esc"],
     "changeQuestionType": ["t"],
     "editCustomAnswer": ["c"],
+    "toggleElaborate": ["e"],
     "toggle": ["space"],
     "nextTab": ["tab", "right"],
     "previousTab": ["shift+tab", "left"],
@@ -234,6 +236,14 @@ Arrays are aliases: any listed key triggers the same action.
 - inside editors, `c` remains ordinary text; editor navigation and file completion are unchanged
 - applies to question tabs, not the review tab
 
+### `main.toggleElaborate`
+
+- default: `["e"]`
+- shown and active on question tabs, not Review; the question displays `Elaborate: on` or `Elaborate: off`, even without notes
+- effect: explicitly toggles the active question between ordinary (`answer`) and tentative (`elaborate`) intent, even without notes
+- selection, notes, custom-answer editing, navigation, and question-type changes leave intent unchanged
+- inside answer and note editors, `e` is ordinary text
+
 ### Allowed bindings
 
 Each action accepts any `pi-tui` key id string, as long as it is:
@@ -274,7 +284,7 @@ Examples:
 These are intentionally not configurable:
 
 - `1..9` triggers option/review shortcuts
-- when `behaviour.doublePressReviewShortcuts` is enabled, review-tab shortcuts `1`, `2`, and `3` require the same key twice
+- when `behaviour.doublePressReviewShortcuts` is enabled, review-tab shortcuts `1` (Submit) and `2` (Cancel) require the same key twice; `3` has no action
 - `@` remains the file-reference affordance in editors
 
 ## Invalid keymaps behavior
@@ -288,7 +298,7 @@ If configured keymaps are invalid:
 - the config file is left unchanged
 - after fixing the file, run `/reload` or restart pi
 
-This also applies when a migrated version `6` config gains `main.editCustomAnswer: ["c"]` and that key conflicts with an existing `main` or `global` binding. The whole keymap falls back to defaults, rather than silently remapping either action.
+This also applies when migration adds `main.editCustomAnswer: ["c"]` or `main.toggleElaborate: ["e"]` and the new key conflicts with an existing `main` or `global` binding. The whole keymap falls back to defaults, rather than silently remapping either action.
 
 Invalid keymaps include:
 
@@ -302,7 +312,7 @@ Invalid keymaps include:
 
 ```json
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "behaviour": {
     "confirmDismissWhenDirty": true,
     "doublePressReviewShortcuts": true,
@@ -320,6 +330,7 @@ Invalid keymaps include:
       "toggle": ["ctrl+t"],
       "changeQuestionType": ["t"],
       "editCustomAnswer": ["c"],
+      "toggleElaborate": ["e"],
       "nextTab": ["tab", "right"],
       "previousTab": ["shift+tab", "left"],
       "nextOption": ["down"],
@@ -368,8 +379,9 @@ When editing this config for a user:
 
 - preserve unrelated fields
 - manually remove `behaviour.autoSubmitWhenAnsweredWithoutNotes` if present; changing its value to `false` does not unblock ask
-- set `schemaVersion` to `8` and remove the obsolete `answer` section when saving an older config
+- set `schemaVersion` to `9` and remove the obsolete `answer` section when saving an older config
 - add `main.editCustomAnswer` when missing; use `["c"]` unless it conflicts with another binding, in which case ask the user which key to use
+- add `main.toggleElaborate` when missing; use `["e"]` unless it conflicts with another binding, in which case ask the user which key to use
 - do not assign fixed numeric shortcuts (`1` through `9`) to configurable actions
 - do not create duplicate bindings within a context or between `global` and `main`, `editor`, or `noteEditor`
 - preserve existing `notifications.channels` unless the user asks to change notification targets

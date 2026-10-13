@@ -2,6 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { UI_DIMENSIONS } from "./constants/ui.ts";
 import { renderResultText } from "./result.ts";
+import { INVALID_RESULT_TEXT, isAskResult } from "./result-validation.ts";
 import { createInitialState } from "./state/create.ts";
 import { collectValidationIssues } from "./state/normalize.ts";
 import { summarizeResult, toAskResult } from "./state/result.ts";
@@ -24,7 +25,9 @@ export const ASK_TOOL_PROMPT_GUIDELINES = [
 	"When calling `ask_user`, mark grounded preferences with `recommended: true` and use the option `description` to state the reason.",
 	"When calling `ask_user`, choose question `type` from the question semantics: `single` means one answer is expected, `multi` means multiple answers could reasonably be selected, and `preview` means options need preview-pane detail.",
 	'When calling `ask_user`, use `type: "preview"` only when every option includes non-empty `preview` text. Option descriptions do not satisfy this requirement.',
-	"After an `ask_user` elaboration or follow-up note, prefer another structured `ask_user` follow-up if a choice is still needed instead of switching to plain-text multiple choice in chat.",
+	'In version:2 results, answers[id].intent is explicit: "answer" supplies ordinary answer content; "elaborate" requests explanation and any retained selection or custom text is tentative, not a final decision.',
+	"Do not infer elaboration intent from notes or omitted answers. Question and option notes are context; an unselected option note does not select that option.",
+	"After an `ask_user` elaboration, prefer another structured `ask_user` follow-up if a choice is still needed instead of switching to plain-text multiple choice in chat.",
 	"When prior `ask_user` answers narrow the branch, bundle the next 2-3 related unresolved decisions into one follow-up `ask_user` call when possible.",
 	"Use one-at-a-time `ask_user` follow-up calls only when the next question materially depends on the previous answer.",
 ] as const;
@@ -67,10 +70,7 @@ export function nonInteractiveResponse(
 		content: [
 			{ type: "text" as const, text: formatNonInteractiveMessage(state) },
 		],
-		details: {
-			...toAskResult(state),
-			cancelled: true,
-		},
+		details: toAskResult({ ...state, cancelled: true }),
 	};
 }
 
@@ -105,17 +105,30 @@ export function renderAskToolCall(args: unknown, theme: ToolTheme) {
 }
 
 export function renderAskToolResult(
-	result: {
-		content: Array<{ type?: string; text?: string }>;
-		details?: AskResult;
-	},
+	result: { content?: unknown; details?: unknown },
 	_options: unknown,
 	theme: ToolTheme
 ) {
-	const details = result.details;
-	if (!(details && Array.isArray(details.questions))) {
-		const text = result.content[0];
-		return new Text(text?.type === "text" ? (text.text ?? "") : "", 0, 0);
+	const details = result?.details;
+	const content = Array.isArray(result?.content)
+		? result.content[0]
+		: undefined;
+	const contentText =
+		content?.type === "text" && typeof content.text === "string"
+			? content.text
+			: undefined;
+	if (details === undefined) {
+		return new Text(contentText ?? INVALID_RESULT_TEXT, 0, 0);
+	}
+	// Pi schema failures have no ask result, but do carry a diagnostic.
+	if (
+		isEmptyDetails(details) &&
+		contentText?.startsWith('Validation failed for tool "ask_user":')
+	) {
+		return new Text(theme.fg("warning", contentText), 0, 0);
+	}
+	if (!isAskResult(details)) {
+		return new Text(theme.fg("warning", INVALID_RESULT_TEXT), 0, 0);
 	}
 	const text = renderResultText(details);
 	return new Text(
@@ -125,14 +138,23 @@ export function renderAskToolResult(
 	);
 }
 
+function isEmptyDetails(details: unknown): boolean {
+	return (
+		details !== null &&
+		typeof details === "object" &&
+		!Array.isArray(details) &&
+		Object.keys(details).length === 0
+	);
+}
+
 function errorResultDetails(
 	params: AskParams,
 	issues: AskValidationIssue[]
 ): AskResult {
 	return {
 		title: params.title,
+		version: 2,
 		cancelled: true,
-		mode: "submit",
 		questions: [],
 		answers: {},
 		error: {

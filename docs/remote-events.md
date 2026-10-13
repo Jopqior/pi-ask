@@ -34,6 +34,12 @@ type PiAskStartedEvent = {
 
 Use `flowId` for submit/correlation. Use `questions[].id` and `questions[].options[].value` for answers. `ask:resume` identifies a form recovered from an interrupted tool call. Started-event options preserve the public optional `recommended` boolean, which is presentation metadata only and never changes remote submission values or labels.
 
+## Protocol compatibility
+
+Event envelopes and remote submissions remain version 1. Remote answers use the legacy global `mode` and legacy validation/serialization; they do not infer per-question intent. Remote v2 migration is deferred.
+
+A flow completed through the TUI instead produces result version 2, including when the flow was announced on these lifecycle channels. The event envelope's `version: 1` is independent of `result.version`. See [interface-upgrade.md](interface-upgrade.md) before consuming results.
+
 ## Submit an answer
 
 ```ts
@@ -112,7 +118,7 @@ type PiAskCompletedEvent = {
   flowId: string;
   toolCallId?: string;
   source: "tool" | "ask:resume";
-  result: AskResult;
+  result: AskResultV2 | LegacyAskResult;
   completedAt: number;
 };
 ```

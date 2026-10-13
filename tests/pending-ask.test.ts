@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { convertToLlm } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_ASK_CONFIG } from "../src/config/defaults.ts";
 import { getAskConfigStore } from "../src/config/store.ts";
 import {
@@ -438,6 +439,7 @@ function createResumeHarness(
 		onDismissNotice?: () => void;
 		onNotice?: (message: string) => void;
 		onOpen?: () => void;
+		onComponent?: (component: { handleInput(data: string): void }) => void;
 		onSend?: (text: string, sendOptions: unknown) => void;
 	} = {}
 ) {
@@ -475,7 +477,7 @@ function createResumeHarness(
 			custom(callback: (...args: any[]) => unknown) {
 				options.onOpen?.();
 				return new Promise((resolve) => {
-					callback(
+					const component = callback(
 						{
 							requestRender() {
 								// Rendering is not needed for this lifecycle test.
@@ -484,7 +486,8 @@ function createResumeHarness(
 						plainTheme(),
 						{},
 						resolve
-					);
+					) as { handleInput(data: string): void };
+					options.onComponent?.(component);
 				});
 			},
 			notify(message: string) {
@@ -533,3 +536,48 @@ function plainTheme() {
 		},
 	};
 }
+
+test("ordinary resumed form uses V2 tentative-answer semantics without opting into remote v1", {
+	timeout: 2000,
+}, async () => {
+	getAskConfigStore().setConfig(disabledNotificationConfig());
+	const branch: unknown[] = [askToolCall("call-v2"), storedPayload("call-v2")];
+	const bus = new TestEventBus();
+	const remoteAsk = createRemoteAskRuntime(bus as never);
+	let delivered: ((text: string) => void) | undefined;
+	const delivery = new Promise<string>((resolve) => {
+		delivered = resolve;
+	});
+	const harness = createResumeHarness(branch, remoteAsk, {
+		onComponent(component) {
+			for (const input of ["1", "e", "\t", "\r"]) {
+				component.handleInput(input);
+			}
+		},
+		onSend(text) {
+			delivered?.(text);
+		},
+	});
+	harness.start("resume");
+	const recoveredText = await delivery;
+	assert.equal(recoveredText, "Q1: (tentative) Canvas — explanation requested");
+	const [message] = convertToLlm([
+		{ role: "user", content: recoveredText, timestamp: 0 },
+	]);
+	assert.equal(
+		message.content,
+		"Q1: (tentative) Canvas — explanation requested"
+	);
+	const completed = findEvent<RemoteAskCompletedEvent>(
+		bus,
+		PI_ASK_COMPLETED_EVENT
+	);
+	assert.equal("version" in completed.result && completed.result.version, 2);
+	assert.equal(
+		"version" in completed.result && completed.result.answers.engine.intent,
+		"elaborate"
+	);
+	assert.deepEqual(harness.dismissedToolCallIds, ["call-v2"]);
+	remoteAsk.disposeAll();
+	getAskConfigStore().setConfig(DEFAULT_ASK_CONFIG);
+});

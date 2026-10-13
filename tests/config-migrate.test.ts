@@ -20,7 +20,7 @@ const currentConfigFile = {
 };
 
 test("config migration rejects every value of the removed field before version validation", () => {
-	for (const schemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 999, undefined]) {
+	for (const schemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 9, 999, undefined]) {
 		for (const value of [true, false, null, 0, "false", [], {}]) {
 			assert.throws(
 				() =>
@@ -213,7 +213,7 @@ test("config migration upgrades v7 in memory after the removed field is deleted"
 	};
 	const original = structuredClone(raw);
 	const result = migrateAskConfig(raw);
-	assert.equal(CURRENT_ASK_CONFIG_SCHEMA_VERSION, 8);
+	assert.equal(CURRENT_ASK_CONFIG_SCHEMA_VERSION, 9);
 	assert.equal(result.migrated, true);
 	assert.equal(
 		"autoSubmitWhenAnsweredWithoutNotes" in result.config.behaviour,
@@ -231,7 +231,7 @@ test("config migration upgrades v7 in memory after the removed field is deleted"
 });
 
 test("config migration preserves a configured custom answer binding", () => {
-	for (const schemaVersion of [6, 7, 8]) {
+	for (const schemaVersion of [6, 7, 8, 9]) {
 		const keymaps = {
 			...DEFAULT_ASK_CONFIG.keymaps,
 			main: {
@@ -246,7 +246,7 @@ test("config migration preserves a configured custom answer binding", () => {
 			schemaVersion,
 		});
 
-		assert.equal(result.migrated, schemaVersion !== 8);
+		assert.equal(result.migrated, schemaVersion !== 9);
 		assert.equal(result.notice, undefined);
 		assert.deepEqual(result.config.keymaps, keymaps);
 	}
@@ -294,4 +294,52 @@ test("config migration framework rejects unversioned config files", () => {
 			}),
 		INVALID_CONFIG_PATTERN
 	);
+});
+
+test("v8 config gains Elaborate in memory and retains valid settings", () => {
+	const raw = {
+		schemaVersion: 8,
+		behaviour: {
+			confirmDismissWhenDirty: false,
+			doublePressReviewShortcuts: false,
+			presentSingleAsMulti: true,
+			showFooterHints: false,
+		},
+		keymaps: structuredClone(DEFAULT_ASK_CONFIG.keymaps),
+		notifications: { channels: ["osc777"], enabled: false },
+	};
+	Reflect.deleteProperty(raw.keymaps.main, "toggleElaborate");
+	raw.keymaps.main.confirm = ["ctrl+k"];
+	const original = structuredClone(raw);
+	const result = migrateAskConfig(raw);
+
+	assert.equal(CURRENT_ASK_CONFIG_SCHEMA_VERSION, 9);
+	assert.equal(result.migrated, true);
+	assert.equal(result.notice, undefined);
+	assert.deepEqual(result.config, {
+		behaviour: raw.behaviour,
+		keymaps: {
+			...raw.keymaps,
+			main: { ...raw.keymaps.main, toggleElaborate: ["e"] },
+		},
+		notifications: raw.notifications,
+	});
+	assert.deepEqual(raw, original);
+});
+
+test("migration preserves a configured Elaborate binding in v8 and v9", () => {
+	for (const schemaVersion of [8, 9]) {
+		const keymaps = {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: { ...DEFAULT_ASK_CONFIG.keymaps.main, toggleElaborate: ["ctrl+e"] },
+		};
+		const result = migrateAskConfig({
+			...currentConfigFile,
+			schemaVersion,
+			keymaps,
+		});
+		assert.equal(result.migrated, schemaVersion === 8);
+		assert.equal(result.notice, undefined);
+		assert.deepEqual(result.config.keymaps, keymaps);
+	}
 });

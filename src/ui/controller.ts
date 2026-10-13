@@ -40,6 +40,7 @@ import {
 	moveOption,
 	moveTab,
 	toggleCurrentMultiOption,
+	toggleQuestionElaborate,
 } from "../state/transitions.ts";
 import { isEditingView } from "../state/view.ts";
 import type { AskParams, AskResult, AskState } from "../types.ts";
@@ -290,6 +291,9 @@ function handleNavigationCommand(
 			clearQuestionTypeChangePending(controller);
 			handleToggleCurrentOption(controller);
 			return;
+		case "toggleQuestionElaborate":
+			handleToggleQuestionElaborate(controller);
+			return;
 		case "changeQuestionType":
 			clearReviewShortcutPending(controller);
 			handleChangeQuestionType(controller);
@@ -337,16 +341,17 @@ function handleNavigationCommand(
 		case "showSettings":
 			showSettingsModal(controller);
 			return;
-		case "ignore":
-		case "editMoveTab":
-		case "editMoveOption":
-		case "editClose":
-		case "editSubmit":
-		case "delegateToEditor":
-			return;
 		default:
 			return;
 	}
+}
+
+function handleToggleQuestionElaborate(controller: AskFlowController) {
+	clearReviewShortcutPending(controller);
+	clearQuestionTypeChangePending(controller);
+	commitState(controller, toggleQuestionElaborate(controller.state), {
+		syncSelection: false,
+	});
 }
 
 function openCustomAnswer(controller: AskFlowController) {

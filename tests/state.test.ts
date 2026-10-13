@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AskQuestionSchema } from "../src/schema.ts";
 import { createInitialState } from "../src/state/create.ts";
 import { cycleCurrentQuestionType } from "../src/state/question-type.ts";
+import {
+	getUnansweredQuestions,
+	isQuestionAnswered,
+} from "../src/state/selectors.ts";
 
 const DUPLICATE_QUESTION_ID_RE = /duplicate question id "scope"/;
 const DUPLICATE_OPTION_VALUE_RE = /duplicate option value "small"/;
@@ -24,6 +29,7 @@ import {
 	saveNote,
 	submitCustomAnswer,
 	toggleCurrentMultiOption,
+	toggleQuestionElaborate,
 } from "../src/state/transitions.ts";
 import type { AskParams } from "../src/types.ts";
 
@@ -54,6 +60,98 @@ function sampleParams(): AskParams {
 	};
 }
 
+test("Elaborate toggles independently on an unanswered question", () => {
+	const initial = createInitialState(sampleParams());
+	const elaborate = toggleQuestionElaborate(initial);
+	assert.equal(elaborate.answers.lang.intent, "elaborate");
+	assert.deepEqual(elaborate.answers.lang.selected, []);
+	assert.equal(elaborate.answers.fe, undefined);
+	assert.deepEqual(initial.answers, {});
+
+	const answer = toggleQuestionElaborate(elaborate);
+	assert.equal(answer.answers.lang?.intent ?? "answer", "answer");
+	assert.equal(answer.completed, false);
+});
+
+test("choices, custom answers, notes, type changes and navigation preserve Elaborate", () => {
+	let state = toggleQuestionElaborate(createInitialState(sampleParams()));
+	state = applyNumberShortcut(state, 1);
+	assert.equal(state.answers.lang.intent, "elaborate");
+	state = enterQuestionNoteMode(state, "lang");
+	state = saveNote(state, "some context");
+	state = enterOptionNoteMode(state, "lang", "ts");
+	state = saveNote(state, "option context");
+	state = applyNumberShortcut(state, 3);
+	state = submitCustomAnswer(state, "custom answer");
+	assert.equal(state.answers.lang.intent, "elaborate");
+	state = cycleCurrentQuestionType(state).state;
+	state = applyNumberShortcut(state, 1);
+	state = applyNumberShortcut(state, 3);
+	state = cycleCurrentQuestionType(state, { confirmed: true }).state;
+	assert.equal(state.answers.lang.intent, "elaborate");
+	state = moveTab(state, 1);
+	assert.equal(state.answers.lang.intent, "elaborate");
+	assert.equal(state.answers.fe?.intent ?? "answer", "answer");
+});
+
+test("unanswered questions require valid selected content rather than notes or intent", () => {
+	let state = createInitialState(sampleParams());
+	assert.deepEqual(
+		getUnansweredQuestions(state).map((q) => q.id),
+		["lang", "fe"]
+	);
+	state = toggleQuestionElaborate(state);
+	state = enterQuestionNoteMode(state, "lang");
+	state = saveNote(state, "please explain");
+	assert.equal(isQuestionAnswered(state, "lang"), false);
+	state = applyNumberShortcut(state, 1);
+	assert.deepEqual(
+		getUnansweredQuestions(state).map((q) => q.id),
+		["fe"]
+	);
+	assert.equal(isQuestionAnswered(state, "missing"), false);
+});
+
+test("foreign or inconsistent selections and single cardinality are unanswered", () => {
+	const initial = createInitialState(sampleParams());
+	const valid = { value: "py", label: "Python", index: 1 };
+	const invalidAnswers = [
+		{ selected: [{ value: "foreign", label: "Foreign", index: 1 }] },
+		{ selected: [{ ...valid, index: 2 }] },
+		{ selected: [{ ...valid, label: "Not Python" }] },
+		{ selected: [valid, { value: "ts", label: "TypeScript", index: 2 }] },
+		{ selected: [valid], customSelected: true, customText: "custom" },
+		{ selected: [], customSelected: true, customText: "  " },
+		{ selected: [], customSelected: false, customText: "saved draft" },
+	];
+	for (const answer of invalidAnswers) {
+		const state = { ...initial, answers: { lang: answer } };
+		assert.equal(isQuestionAnswered(state, "lang"), false);
+		assert.equal(getUnansweredQuestions(state)[0]?.id, "lang");
+	}
+});
+
+test("multi answers permit distinct choices plus custom, but reject duplicate choices", () => {
+	const initial = createInitialState(sampleParams());
+	const selection = { value: "react", label: "React", index: 1 };
+	const valid = {
+		...initial,
+		answers: {
+			lang: { selected: [], customSelected: true, customText: "custom" },
+			fe: { selected: [selection], customSelected: true, customText: "other" },
+		},
+	};
+	assert.deepEqual(getUnansweredQuestions(valid), []);
+	const duplicate = {
+		...valid,
+		answers: { ...valid.answers, fe: { selected: [selection, selection] } },
+	};
+	assert.deepEqual(
+		getUnansweredQuestions(duplicate).map((q) => q.id),
+		["fe"]
+	);
+});
+
 test("normalize defaults via initial state", () => {
 	const state = createInitialState({
 		questions: [
@@ -67,7 +165,7 @@ test("normalize defaults via initial state", () => {
 
 	assert.equal(state.questions[0].label, "Q1");
 	assert.equal(state.questions[0].type, "single");
-	assert.equal(state.questions[0].required, false);
+	assert.equal("required" in state.questions[0], false);
 	assert.equal(
 		getRenderableOptions(state.questions[0]).at(-1)?.label,
 		"Type your own"
@@ -76,6 +174,19 @@ test("normalize defaults via initial state", () => {
 		getRenderableOptions(state.questions[0]).at(-1)?.isCustomOption,
 		true
 	);
+});
+
+test("legacy required flags are accepted and ignored, and absent from the model schema", () => {
+	const params = sampleParams();
+	params.questions[0].required = true;
+	params.questions[1].required = false;
+	const state = createInitialState(params);
+	assert.equal(
+		state.questions.some((question) => "required" in question),
+		false
+	);
+	assert.equal("required" in AskQuestionSchema.properties, false);
+	assert.equal(confirmCurrentSelection(moveTab(state, -1)).completed, false);
 });
 
 test("preview questions keep their type and option previews", () => {
@@ -429,18 +540,28 @@ test("confirmed multi-to-single type change preserves custom text and notes", ()
 	assert.equal(state.answers.q1.note, "Keep note");
 });
 
-test("submit can complete even when some questions are unanswered", () => {
+test("submit stays on Review until every question is validly answered", () => {
 	let state = createInitialState(sampleParams());
+	state = applyNumberShortcut(state, 1);
 	state = moveTab(state, -1);
-	assert.equal(state.view.kind, "submit");
-	state = confirmCurrentSelection(state);
+	const blocked = confirmCurrentSelection(state);
+	assert.equal(blocked.completed, false);
+	assert.equal(blocked.cancelled, false);
+	assert.equal(blocked.view.kind, "submit");
+	assert.deepEqual(
+		getUnansweredQuestions(blocked).map((q) => q.id),
+		["fe"]
+	);
 
+	state = moveTab(blocked, -1);
+	state = applyNumberShortcut(state, 1);
+	state = confirmCurrentSelection(state);
+	state = confirmCurrentSelection(state);
 	assert.equal(state.completed, true);
 	assert.equal(state.cancelled, false);
-	assert.equal(state.mode, "submit");
 });
 
-test("submit tab can complete in elaborate mode", () => {
+test("Review offers only submit and cancel, and cancel permits unanswered questions", () => {
 	let state = createInitialState(sampleParams());
 	state = moveTab(state, -1);
 	state = moveOption(state, 1);
@@ -448,8 +569,8 @@ test("submit tab can complete in elaborate mode", () => {
 	state = confirmCurrentSelection(state);
 
 	assert.equal(state.completed, true);
-	assert.equal(state.cancelled, false);
-	assert.equal(state.mode, "elaborate");
+	assert.equal(state.cancelled, true);
+	assert.equal(moveOption(state, 1).activeSubmitActionIndex, 1);
 });
 
 test("selecting other enters input mode and custom submit saves without advancing", () => {
@@ -578,7 +699,7 @@ test("empty custom draft clears the stored answer but preserves notes", () => {
 	assert.equal(state.view.kind, "navigate");
 });
 
-test("question note can be saved without selecting an answer and is submitted", () => {
+test("question notes are preserved without implying an answer or Elaborate", () => {
 	let state = createInitialState({
 		questions: [
 			{ id: "q1", prompt: "Question?", options: [{ value: "a", label: "A" }] },
@@ -592,6 +713,7 @@ test("question note can be saved without selecting an answer and is submitted", 
 	assert.equal(state.view.kind, "navigate");
 	assert.equal(state.answers.q1.note, "needs examples");
 	assert.deepEqual(toAskResult(state).answers.q1, {
+		intent: "answer",
 		values: [],
 		labels: [],
 		indices: [],
@@ -601,7 +723,7 @@ test("question note can be saved without selecting an answer and is submitted", 
 	});
 });
 
-test("option notes can exist before selection but only selected option notes are submitted", () => {
+test("option notes survive selection without selecting their option", () => {
 	let state = createInitialState({
 		questions: [
 			{
@@ -619,7 +741,7 @@ test("option notes can exist before selection but only selected option notes are
 	state = enterOptionNoteMode(state, "q1", "vue");
 	state = saveNote(state, "maybe later");
 	assert.equal(state.answers.q1.optionNotes?.vue, "maybe later");
-	assert.equal(toAskResult(state).answers.q1, undefined);
+	assert.equal(isQuestionAnswered(state, "q1"), false);
 
 	state = toggleCurrentMultiOption(state);
 	assert.deepEqual(
@@ -637,7 +759,7 @@ test("option notes can exist before selection but only selected option notes are
 	});
 });
 
-test("deselecting an option keeps its note in state but omits it from submission", () => {
+test("deselecting an option preserves its note and makes the question unanswered", () => {
 	let state = createInitialState({
 		questions: [
 			{
@@ -659,10 +781,11 @@ test("deselecting an option keeps its note in state but omits it from submission
 	state = toggleCurrentMultiOption(state);
 
 	assert.equal(state.answers.q1.optionNotes?.vue, "migration risk");
-	assert.equal(toAskResult(state).answers.q1, undefined);
+	assert.equal(isQuestionAnswered(state, "q1"), false);
 
 	state = toggleCurrentMultiOption(state);
 	assert.deepEqual(toAskResult(state).answers.q1, {
+		intent: "answer",
 		values: ["vue"],
 		labels: ["Vue"],
 		indices: [2],
@@ -694,7 +817,7 @@ test("multi-select toggles saved custom text selection with space or number shor
 	state = toggleCurrentMultiOption(state);
 	assert.equal(state.answers.q1.customText, "SolidStart");
 	assert.equal(state.answers.q1.customSelected, undefined);
-	assert.equal(toAskResult(state).answers.q1, undefined);
+	assert.equal(isQuestionAnswered(state, "q1"), false);
 	assert.equal(state.view.kind, "navigate");
 	assert.equal(state.activeTabIndex, 0);
 
@@ -708,7 +831,7 @@ test("multi-select toggles saved custom text selection with space or number shor
 	assert.equal(state.answers.q1.customText, "SolidStart");
 	assert.equal(state.answers.q1.customSelected, undefined);
 	assert.equal(state.view.kind, "navigate");
-	assert.equal(toAskResult(state).answers.q1, undefined);
+	assert.equal(isQuestionAnswered(state, "q1"), false);
 });
 
 test("multi-select keeps custom text when toggling additional options", () => {
@@ -757,6 +880,7 @@ test("preview questions can store selected option notes for submission", () => {
 	state = applyNumberShortcut(state, 2);
 
 	assert.deepEqual(toAskResult(state).answers.preview, {
+		intent: "answer",
 		values: ["spacious"],
 		labels: ["Spacious"],
 		indices: [2],
@@ -784,6 +908,7 @@ test("preview questions support custom answers", () => {
 	state = submitCustomAnswer(state, "Something else");
 
 	assert.deepEqual(toAskResult(state).answers.preview, {
+		intent: "answer",
 		values: ["Something else"],
 		labels: ["Something else"],
 		indices: [],
@@ -820,30 +945,29 @@ test("tab navigation works with a single question", () => {
 	assert.equal(state.view.kind, "navigate");
 });
 
-test("submit tab number shortcuts trigger matching review actions", () => {
+test("Review digits submit, cancel, and ignore 3 without changing the selected action", () => {
 	let state = createInitialState(sampleParams());
-	state = moveTab(state, -1);
+	state = confirmCurrentSelection(state);
+	state = applyNumberShortcut(state, 1);
+	state = confirmCurrentSelection(state);
 	assert.equal(state.view.kind, "submit");
 
 	const submitted = applyNumberShortcut(state, 1);
 	assert.equal(submitted.completed, true);
 	assert.equal(submitted.cancelled, false);
-	assert.equal(submitted.mode, "submit");
 
-	const elaborated = applyNumberShortcut(state, 2);
-	assert.equal(elaborated.completed, true);
-	assert.equal(elaborated.cancelled, false);
-	assert.equal(elaborated.mode, "elaborate");
-
-	const cancelled = applyNumberShortcut(state, 3);
+	const cancelled = applyNumberShortcut(state, 2);
 	assert.equal(cancelled.completed, true);
 	assert.equal(cancelled.cancelled, true);
-	assert.equal(cancelled.mode, "submit");
 
-	const ignored = applyNumberShortcut(state, 4);
-	assert.equal(ignored.completed, false);
-	assert.equal(ignored.cancelled, false);
-	assert.equal(ignored.activeSubmitActionIndex, 0);
+	const focusedCancel = moveOption(state, 1);
+	assert.deepEqual(applyNumberShortcut(focusedCancel, 3), focusedCancel);
+	assert.deepEqual(applyNumberShortcut(state, 4), state);
+	assert.equal(
+		applyNumberShortcut(moveTab(createInitialState(sampleParams()), -1), 1)
+			.completed,
+		false
+	);
 });
 
 test("escape cancels from main flow but only exits input and note modes when editing", () => {

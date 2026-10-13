@@ -4,7 +4,7 @@ import {
 } from "../constants/keymaps.ts";
 import type {
 	AskConfig,
-	AskConfigFileV8,
+	AskConfigFileV9,
 	AskConfigKeymaps,
 	AskNotificationChannel,
 } from "./schema.ts";
@@ -24,7 +24,7 @@ export const DEFAULT_ASK_CONFIG: AskConfig = {
 };
 
 export function normalizeAskConfig(
-	config?: Partial<AskConfigFileV8> | AskConfig
+	config?: Partial<AskConfigFileV9> | AskConfig
 ): AskConfig {
 	return {
 		behaviour: {
@@ -51,10 +51,10 @@ export function normalizeAskConfig(
 	};
 }
 
-export function toAskConfigFileV8(config: AskConfig): AskConfigFileV8 {
+export function toAskConfigFileV9(config: AskConfig): AskConfigFileV9 {
 	const normalized = normalizeAskConfig(config);
 	return {
-		schemaVersion: 8,
+		schemaVersion: 9,
 		behaviour: {
 			confirmDismissWhenDirty: normalized.behaviour.confirmDismissWhenDirty,
 			doublePressReviewShortcuts:
@@ -93,6 +93,7 @@ function cloneKeymaps(keymaps: AskConfigKeymaps): AskConfigKeymaps {
 			previousTab: [...keymaps.main.previousTab],
 			questionNote: [...keymaps.main.questionNote],
 			toggle: [...keymaps.main.toggle],
+			toggleElaborate: [...keymaps.main.toggleElaborate],
 		},
 		editor: {
 			close: [...keymaps.editor.close],

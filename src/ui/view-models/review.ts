@@ -7,6 +7,7 @@ import {
 	shouldRenderAnswersIndividually,
 	toReviewAnswer,
 } from "../../state/result.ts";
+import { isQuestionAnswered } from "../../state/selectors.ts";
 import type { AskState } from "../../types.ts";
 
 export interface ReviewSelectionModel {
@@ -35,7 +36,6 @@ export function buildReviewScreenModel(
 	state: AskState,
 	width: number
 ): ReviewScreenModel {
-	const showAllNotes = state.activeSubmitActionIndex === 1;
 	const actionColumnWidth = getSubmitActionColumnWidth();
 	return {
 		actionColumnWidth,
@@ -46,13 +46,26 @@ export function buildReviewScreenModel(
 		layout: shouldUseWideSubmitLayout(width, actionColumnWidth)
 			? "wide"
 			: "stacked",
-		questions: state.questions.map((question) =>
-			toReviewQuestionModel(
-				question.label,
-				toReviewAnswer(question, state.answers[question.id], showAllNotes)
-			)
-		),
+		questions: state.questions.map((question) => {
+			const answered = isQuestionAnswered(state, question.id);
+			const tentative = state.answers[question.id]?.intent === "elaborate";
+			const status = getReviewStatus(answered, tentative);
+			return {
+				...toReviewQuestionModel(
+					`${question.label} [${status}]`,
+					toReviewAnswer(question, state.answers[question.id], true)
+				),
+				unanswered: !answered,
+			};
+		}),
 	};
+}
+
+function getReviewStatus(answered: boolean, tentative: boolean): string {
+	if (!answered) {
+		return "Unanswered";
+	}
+	return tentative ? "Tentative · Elaborate" : "Answered";
 }
 
 function toReviewQuestionModel(

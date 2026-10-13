@@ -61,6 +61,19 @@ function renderSubmitReviewLines(
 		}
 	}
 
+	if (model.questions.some((question) => question.unanswered)) {
+		lines.push("");
+		pushWrappedText(
+			lines,
+			"Answer all questions before submitting.",
+			width,
+			theme,
+			"warning",
+			" ",
+			" "
+		);
+	}
+
 	return lines;
 }
 
@@ -75,7 +88,6 @@ function renderReviewQuestion(
 		lines.push(
 			truncateToWidth(`   ${theme.fg("dim", UI_TEXT.unanswered)}`, width)
 		);
-		return;
 	}
 
 	if (question.note) {

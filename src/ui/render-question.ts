@@ -24,6 +24,15 @@ export function renderQuestionScreen(context: QuestionRenderContext) {
 	const model = buildQuestionScreenModel(context);
 
 	pushWrappedText(lines, question.prompt, width, theme, "text", " ", " ");
+	pushWrappedText(
+		lines,
+		`Elaborate: ${context.state.answers[question.id]?.intent === "elaborate" ? "on · answer is tentative" : "off"}`,
+		width,
+		theme,
+		"dim",
+		" ",
+		" "
+	);
 	renderQuestionNote(lines, model.questionNote, context);
 
 	if (model.mode === "preview") {

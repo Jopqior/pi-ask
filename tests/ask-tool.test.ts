@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
+import { convertToLlm } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 import { registerAskTool } from "../src/ask-tool.ts";
 import { DEFAULT_ASK_CONFIG } from "../src/config/defaults.ts";
@@ -176,13 +177,18 @@ test("ask tool returns pending questions in non-interactive mode", async () => {
 	);
 
 	assert.equal(result.details.cancelled, true);
-	assert.equal(result.details.mode, "submit");
+	assert.equal(result.details.version, 2);
+	assert.equal("mode" in result.details, false);
 	assert.deepEqual(result.details.questions, [
 		{
 			id: "goal",
 			label: "Goal",
 			prompt: "What should I optimize for?",
 			type: "single",
+			options: [
+				{ value: "speed", label: "Speed" },
+				{ value: "safety", label: "Safety" },
+			],
 		},
 	]);
 	assert.deepEqual(result.details.answers, {});
@@ -262,7 +268,8 @@ test("ask tool rejects invalid payloads before UI opens with structured issues",
 	);
 
 	assert.equal(result.details.cancelled, true);
-	assert.equal(result.details.mode, "submit");
+	assert.equal(result.details.version, 2);
+	assert.equal("mode" in result.details, false);
 	assert.equal(result.details.questions.length, 0);
 	assert.deepEqual(result.details.error, {
 		kind: "invalid_input",
@@ -527,7 +534,7 @@ test("ask tool transcript renderers summarize call and cancelled result", () => 
 		undefined,
 		theme
 	).text;
-	assert.equal(resultText, "Cancelled");
+	assert.equal(resultText, "Legacy ask_user result (read-only)\nCancelled");
 
 	const invalidText = tool.renderResult(
 		{
@@ -546,7 +553,10 @@ test("ask tool transcript renderers summarize call and cancelled result", () => 
 		undefined,
 		theme
 	).text;
-	assert.equal(invalidText, "Invalid tool payload");
+	assert.equal(
+		invalidText,
+		"Legacy ask_user result (read-only)\nInvalid tool payload"
+	);
 
 	const schemaErrorText = tool.renderResult(
 		{
@@ -564,5 +574,162 @@ test("ask tool transcript renderers summarize call and cancelled result", () => 
 	assert.equal(
 		schemaErrorText,
 		'Validation failed for tool "ask_user": missing label'
+	);
+});
+
+test("result renderer rejects corrupted or unknown-version results without trusting success content", () => {
+	const { tool } = registerMockTool();
+	const theme = {
+		bold: (text: string) => text,
+		fg: (_token: string, text: string) => text,
+	};
+	const good = {
+		version: 2,
+		cancelled: false,
+		questions: [
+			{
+				id: "goal",
+				label: "Goal",
+				prompt: "Choose?",
+				type: "single",
+				options: [{ value: "yes", label: "Yes" }],
+			},
+		],
+		answers: {
+			goal: {
+				intent: "answer",
+				values: ["yes"],
+				labels: ["Yes"],
+				indices: [1],
+			},
+		},
+	};
+	const malformed = [
+		{ ...good, questions: [], answers: {} },
+		{},
+		null,
+		{ ...good, version: 3 },
+		{ ...good, version: null },
+		{ ...good, answers: null },
+		{ ...good, answers: [] },
+		{ ...good, questions: [null] },
+		{ ...good, questions: [{ ...good.questions[0], options: [null] }] },
+		{ ...good, answers: { goal: { ...good.answers.goal, intent: "submit" } } },
+		{ ...good, answers: { goal: { ...good.answers.goal, labels: "Yes" } } },
+		{ ...good, answers: { goal: { ...good.answers.goal, values: [1] } } },
+		{ ...good, answers: { goal: { ...good.answers.goal, indices: ["1"] } } },
+		{
+			...good,
+			answers: { goal: { ...good.answers.goal, optionNotes: { yes: 42 } } },
+		},
+		{
+			cancelled: false,
+			mode: "elaborate",
+			questions: [],
+			answers: {},
+			elaboration: { items: [null] },
+		},
+	];
+	for (const details of malformed) {
+		assert.equal(
+			tool.renderResult(
+				{ content: [{ type: "text", text: "✓ Goal: Yes" }], details },
+				undefined,
+				theme
+			).text,
+			"Invalid ask_user result"
+		);
+	}
+	assert.equal(
+		tool.renderResult({ content: [], details: good }, undefined, theme).text,
+		"✓ Goal: Yes"
+	);
+});
+
+test("interactive tool delivers per-question intent through the V2 result outlet", async () => {
+	const { tool } = registerMockTool();
+	getAskConfigStore().setConfig({
+		...DEFAULT_ASK_CONFIG,
+		notifications: { ...DEFAULT_ASK_CONFIG.notifications, enabled: false },
+	});
+	const theme = {
+		fg: (_token: string, text: string) => text,
+		bg: (_token: string, text: string) => text,
+	};
+	const result = await tool.execute(
+		"v2-call",
+		sampleParams(),
+		undefined,
+		noop,
+		{
+			cwd: process.cwd(),
+			mode: "tui",
+			ui: {
+				setWorkingVisible: noop,
+				custom(callback: (...args: unknown[]) => unknown) {
+					return new Promise((resolve) => {
+						const component = callback(
+							{ requestRender: noop },
+							theme,
+							{},
+							resolve
+						) as { handleInput(data: string): void };
+						for (const input of ["1", "e", "\t", "\r"]) {
+							component.handleInput(input);
+						}
+					});
+				},
+			},
+		}
+	);
+	assert.equal(result.details.version, 2);
+	assert.equal(result.details.answers.goal.intent, "elaborate");
+	assert.equal("mode" in result.details, false);
+	assert.equal(
+		result.content[0].text,
+		"Goal: (tentative) Speed — explanation requested"
+	);
+	assert.equal(
+		tool.renderResult(result, undefined, theme).text,
+		"? Goal: (tentative) Speed — explanation requested"
+	);
+	for (const details of [result.details, undefined]) {
+		const [message] = convertToLlm([
+			{
+				role: "toolResult",
+				toolCallId: "v2-call",
+				toolName: "ask_user",
+				content: result.content,
+				...(details ? { details } : {}),
+				isError: false,
+				timestamp: 0,
+			},
+		]);
+		assert(message.role === "toolResult");
+		assert.deepEqual(message.content, [
+			{ type: "text", text: "Goal: (tentative) Speed — explanation requested" },
+		]);
+	}
+});
+
+test("tool guidance treats V2 answer intent as explicit and retained elaborate content as tentative", () => {
+	const { tool } = registerMockTool();
+	assert(
+		tool.promptGuidelines.some(
+			(guideline) =>
+				guideline.includes("answers[id].intent") &&
+				guideline.includes("tentative")
+		)
+	);
+	assert(
+		tool.promptGuidelines.some(
+			(guideline) =>
+				guideline.includes("Do not infer") && guideline.includes("notes")
+		)
+	);
+	assert(
+		!tool.promptGuidelines.some((guideline) =>
+			guideline.includes("Explain before re-asking")
+		)
 	);
 });

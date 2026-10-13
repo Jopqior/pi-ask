@@ -1,7 +1,7 @@
 import { normalizeLegacyFlatKeymaps } from "../../constants/keymaps.ts";
 import type { AskConfigMigration, VersionedAskConfigFile } from "./types.ts";
 
-export const CURRENT_ASK_CONFIG_SCHEMA_VERSION = 8;
+export const CURRENT_ASK_CONFIG_SCHEMA_VERSION = 9;
 
 const ASK_CONFIG_MIGRATIONS: AskConfigMigration[] = [
 	{
@@ -68,7 +68,31 @@ const ASK_CONFIG_MIGRATIONS: AskConfigMigration[] = [
 		to: 8,
 		migrate: (config) => ({ ...config, schemaVersion: 8 }),
 	},
+	{
+		from: 8,
+		to: 9,
+		migrate: (config) => ({
+			...config,
+			keymaps: addV9Keymaps(config.keymaps),
+			schemaVersion: 9,
+		}),
+	},
 ];
+
+function addV9Keymaps(keymaps: unknown): unknown {
+	if (!(keymaps && typeof keymaps === "object" && "main" in keymaps)) {
+		return keymaps;
+	}
+	const current = keymaps as Record<string, unknown>;
+	const main = current.main;
+	if (!(main && typeof main === "object") || "toggleElaborate" in main) {
+		return keymaps;
+	}
+	return {
+		...current,
+		main: { ...main, toggleElaborate: ["e"] },
+	};
+}
 
 function addV7Keymaps(keymaps: unknown): unknown {
 	if (!(keymaps && typeof keymaps === "object" && "main" in keymaps)) {

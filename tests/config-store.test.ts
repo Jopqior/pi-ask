@@ -69,6 +69,7 @@ test("config store reports the legacy source path and loads only after manual fi
 	await assert.rejects(readFile(path, "utf-8"), { code: "ENOENT" });
 });
 
+const ELABORATE_COLLISION_NOTICE_PATTERN = /Duplicate.*toggleElaborate/;
 const DEFAULT_KEYMAPS_NOTICE_PATTERN =
 	/Using default ask keymaps for this session/;
 const SAVE_FAILURE_PATTERN =
@@ -78,7 +79,7 @@ function expectedConfigFile(
 	overrides: { behaviour?: typeof DEFAULT_ASK_CONFIG.behaviour } = {}
 ) {
 	return {
-		schemaVersion: 8,
+		schemaVersion: 9,
 		behaviour: overrides.behaviour ?? DEFAULT_ASK_CONFIG.behaviour,
 		keymaps: DEFAULT_ASK_CONFIG.keymaps,
 		notifications: DEFAULT_ASK_CONFIG.notifications,
@@ -121,40 +122,17 @@ test("resetAskConfigStore reloads the global store from disk", async () => {
 	await rm(root, { force: true, recursive: true });
 });
 
-test("config store writes defaults when file is missing", async () => {
+test("config store uses in-memory defaults without creating a missing file", async (t) => {
 	const path = await makeTempPath("pi-ask-config-missing-");
+	t.after(() => rm(dirname(path), { force: true, recursive: true }));
 	const store = new AskConfigStore(path);
 
 	const result = await store.ensureLoaded();
 
 	assert.deepEqual(result.config, DEFAULT_ASK_CONFIG);
-	assert.deepEqual(
-		JSON.parse(await readFile(path, "utf-8")),
-		expectedConfigFile()
-	);
-	await rm(dirname(path), { force: true, recursive: true });
-});
-
-test("config store uses defaults when initial config creation fails", async () => {
-	class FailingInitialSaveStore extends AskConfigStore {
-		override save(_config: AskConfig | Partial<AskConfig>): Promise<AskConfig> {
-			return Promise.reject(
-				new Error("Unable to save ask config; edit it manually.")
-			);
-		}
-	}
-	const path = await makeTempPath("pi-ask-config-initial-save-failure-");
-	const store = new FailingInitialSaveStore(path);
-
-	const result = await store.ensureLoaded();
-
-	assert.deepEqual(result.config, DEFAULT_ASK_CONFIG);
-	assert.equal(result.notice?.kind, "warning");
-	assert.equal(
-		result.notice?.text,
-		"Unable to save ask config; edit it manually."
-	);
-	await rm(dirname(path), { force: true, recursive: true });
+	assert.equal(result.notice, undefined);
+	await assert.rejects(readFile(path, "utf-8"), { code: "ENOENT" });
+	assert.deepEqual(await readdir(dirname(path)), []);
 });
 
 test("config store writes full normalized config on save", async () => {
@@ -193,7 +171,7 @@ test("config store saves and reloads a configured custom answer binding", async 
 
 	await store.save({ ...DEFAULT_ASK_CONFIG, keymaps });
 	const saved = JSON.parse(await readFile(path, "utf-8"));
-	assert.equal(saved.schemaVersion, 8);
+	assert.equal(saved.schemaVersion, 9);
 	assert.deepEqual(saved.keymaps.main.editCustomAnswer, ["ctrl+e"]);
 
 	const result = await new AskConfigStore(path).ensureLoaded();
@@ -292,7 +270,7 @@ test("config store loads migrated config without rewriting and saves without ans
 	const saved = JSON.parse(await readFile(path, "utf-8"));
 	assert.equal("answer" in saved, false);
 	assert.deepEqual(saved, {
-		schemaVersion: 8,
+		schemaVersion: 9,
 		behaviour,
 		keymaps,
 		notifications,
@@ -321,7 +299,7 @@ test("config store loads v6 with the custom answer binding without rewriting", a
 
 	await store.save(result.config);
 	const saved = JSON.parse(await readFile(path, "utf-8"));
-	assert.equal(saved.schemaVersion, 8);
+	assert.equal(saved.schemaVersion, 9);
 	assert.deepEqual(saved.keymaps.main.editCustomAnswer, ["c"]);
 });
 
@@ -476,4 +454,94 @@ test("config store falls back only keymaps when configured keymaps are invalid",
 	assert.deepEqual(result.config.keymaps, DEFAULT_ASK_CONFIG.keymaps);
 	assert.match(result.notice?.text ?? "", DEFAULT_KEYMAPS_NOTICE_PATTERN);
 	await rm(dirname(path), { force: true, recursive: true });
+});
+
+test("Elaborate binding collisions warn and fall back all keymaps without rewriting config", async (t) => {
+	for (const schemaVersion of [8, 9]) {
+		for (const context of ["main", "global"] as const) {
+			await t.test(`v${schemaVersion} ${context}`, async (subtest) => {
+				const path = await makeTempPath("pi-ask-config-elaborate-collision-");
+				subtest.after(() =>
+					rm(dirname(path), { force: true, recursive: true })
+				);
+				const keymaps = structuredClone(DEFAULT_ASK_CONFIG.keymaps);
+				if (schemaVersion === 8) {
+					Reflect.deleteProperty(keymaps.main, "toggleElaborate");
+				}
+				keymaps.main.confirm = ["ctrl+k"];
+				if (context === "main") {
+					keymaps.main.cancel = ["e"];
+				} else {
+					keymaps.global.settings = ["e"];
+				}
+				const behaviour = {
+					confirmDismissWhenDirty: false,
+					doublePressReviewShortcuts: false,
+					presentSingleAsMulti: true,
+					showFooterHints: false,
+				};
+				const notifications = { channels: ["osc777"], enabled: false };
+				const content = JSON.stringify({
+					schemaVersion,
+					behaviour,
+					keymaps,
+					notifications,
+				});
+				await writeFile(path, content);
+				const result = await new AskConfigStore(path).ensureLoaded();
+
+				assert.deepEqual(result.config, {
+					behaviour,
+					keymaps: DEFAULT_ASK_CONFIG.keymaps,
+					notifications,
+				});
+				assert.equal(result.notice?.kind, "warning");
+				assert.match(
+					result.notice?.text ?? "",
+					ELABORATE_COLLISION_NOTICE_PATTERN
+				);
+				assert.match(result.notice?.text ?? "", DEFAULT_KEYMAPS_NOTICE_PATTERN);
+				assert.equal(await readFile(path, "utf-8"), content);
+				assert.deepEqual(await readdir(dirname(path)), [
+					"eko24ive-pi-ask.json",
+				]);
+			});
+		}
+	}
+});
+
+test("config store loads v8 Elaborate defaults in memory and writes v9 only on explicit save", async (t) => {
+	const path = await makeTempPath("pi-ask-config-v8-");
+	t.after(() => rm(dirname(path), { force: true, recursive: true }));
+	const keymaps = structuredClone(DEFAULT_ASK_CONFIG.keymaps);
+	Reflect.deleteProperty(keymaps.main, "toggleElaborate");
+	keymaps.main.confirm = ["ctrl+k"];
+	const behaviour = {
+		...DEFAULT_ASK_CONFIG.behaviour,
+		doublePressReviewShortcuts: false,
+	};
+	const notifications = { channels: ["osc777"], enabled: false };
+	const content = JSON.stringify({
+		schemaVersion: 8,
+		keymaps,
+		behaviour,
+		notifications,
+	});
+	await writeFile(path, content);
+	const store = new AskConfigStore(path);
+
+	const result = await store.ensureLoaded();
+	assert.equal(result.notice, undefined);
+	assert.deepEqual(result.config, {
+		behaviour,
+		keymaps: { ...keymaps, main: { ...keymaps.main, toggleElaborate: ["e"] } },
+		notifications,
+	});
+	assert.equal(await readFile(path, "utf-8"), content);
+
+	await store.save(result.config);
+	assert.deepEqual(JSON.parse(await readFile(path, "utf-8")), {
+		schemaVersion: 9,
+		...result.config,
+	});
 });

@@ -3,7 +3,7 @@
 # @jopqior/pi-ask
 
 [![npm downloads](https://badgen.net/npm/dm/@jopqior/pi-ask)](https://www.npmjs.com/package/@jopqior/pi-ask)
-[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=8ee807cc02facc73c2207daad8afb4bfb8248ac4)](https://github.com/Jopqior/pi-ask/commits/main)
+[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=2218ef1631a03e5bbea2fb7234dda267f89553d7)](https://github.com/Jopqior/pi-ask/commits/main)
 [![stars](https://badgen.net/github/stars/Jopqior/pi-ask)](https://github.com/Jopqior/pi-ask/stargazers)
 
 > [!IMPORTANT]
@@ -56,8 +56,8 @@ Once installed, this package gives the agent a native way to ask for clarificati
 - ✍️ Inline free-form `Type your own` answers
 - 📎 Native pi-style `@` file references inside answer and note editors
 - 📝 Question-level and option-level notes
-- 👀 Review tab with `Submit`, `Elaborate`, and `Cancel`
-- 💬 Elaboration flow to capture note-based clarification before final submission
+- 👀 Review tab with `Submit` and `Cancel`; every question needs an answer
+- 💬 Per-question Elaborate toggle (`e`) keeps answers tentative for explanation
 - ⌨️ Context-aware customizable keymaps with aliases for main flow, editors, and settings
 - ⚙️ Ask settings with persisted behaviour, notifications, and keymaps
 - 🔔 Optional external notifications when an ask flow is waiting for input
@@ -78,12 +78,12 @@ Attach clarification notes to a specific option (`n`) or add broader question-le
 |---|---|
 | ![Option note editor with note text for selected option](docs/media/feature-option-note.png) | ![Question-level note editor with saved note](docs/media/feature-question-note.png) |
 
-### Review tab — Elaborate and Submit
-Answering the last question always opens Review; answers are never auto-submitted. Choose Submit explicitly, or ask the agent to elaborate on notes before finalizing choices.
+### Per-question Elaborate and Review
+Press `e` on a question to toggle Elaborate, with or without notes. Its selected options or custom answer stay tentative: they provide explanation context, not a final decision. Editing answers, adding notes, navigating, and changing question type do not change this intent. The question shows `Elaborate: on` or `Elaborate: off`, even without notes. Press `e` again to return to ordinary answering; inside editors, `e` is text.
 
-| Elaborate | Submit |
-|---|---|
-| ![Review tab with Elaborate action and expanded note preview](docs/media/feature-review-elaborate.png) | ![Review tab with Submit action highlighted](docs/media/feature-review-submit.png) |
+Advancing from the last question opens Review without submitting. Review labels questions `Answered`, `Tentative · Elaborate`, or `Unanswered` and offers only Submit and Cancel. Submit requires a valid selection or a selected nonblank custom answer for every question, including tentative ones. Notes alone, Elaborate alone, and a deselected custom draft do not count. If answers are missing, Review lists them, keeps a warning visible, and stays open. Cancel is always available.
+
+The demo and screenshots above show the earlier interface; the current Review no longer has a global Elaborate action.
 
 ### Single-select and multi-select questions
 Pick one option when answers are mutually exclusive, or choose multiple options when several answers apply.
@@ -116,7 +116,7 @@ Each action accepts a key string or an array of aliases.
 Default contexts:
 
 - `global`: `dismiss` (`Ctrl+C`) and `settings` (`?`)
-- `main`: confirm/cancel/toggle, custom-answer editing (`c`), tab navigation, option navigation, and note shortcuts
+- `main`: confirm/cancel/toggle, custom-answer editing (`c`), per-question Elaborate (`e`), tab navigation, option navigation, and note shortcuts
 - `editor`: custom answer submit/close and empty-editor navigation
 - `noteEditor`: note save/close and empty-editor navigation
 - `settingsModal`: close, next/previous setting, and toggle
@@ -126,7 +126,7 @@ Fixed bindings:
 | Key | Context | Effect |
 |---|---|---|
 | `1..9` | Options list | Select or toggle matching option |
-| `1` `2` `3` | Review tab | Trigger `Submit` / `Elaborate` / `Cancel` |
+| `1` / `2` | Review tab | Trigger `Submit` / `Cancel` (`3` does nothing) |
 | `@` | Editors | File-reference affordance |
 | Arrow keys / `Tab` | Non-empty editor | Stay in editor for cursor movement |
 
@@ -138,11 +138,11 @@ You can edit the config file yourself, ask pi to edit it for you, or use `/ask-s
 
 If your config contains `behaviour.autoSubmitWhenAnsweredWithoutNotes`, ask is blocked, including interrupted-form recovery. Manually delete the field from the file named in the error, then run `/reload` or restart pi; setting it to `false` is not enough. The file is left unchanged and defaults are not used to bypass this error.
 
-After that field is removed, config versions 1–7 migrate to schema 8 in memory, adding `main.editCustomAnswer: ["c"]` only when missing and preserving existing bindings and other settings. A key collision triggers a warning and falls back to the full default keymaps while retaining valid behaviour and notification channels. Loading never rewrites the file; explicit saves use version 8.
+After that field is removed, config versions 1–8 migrate to schema 9 in memory, adding missing `main.editCustomAnswer: ["c"]` and `main.toggleElaborate: ["e"]` and preserving existing bindings and other settings. A key collision triggers a warning and falls back to the full default keymaps while retaining valid behaviour and notification channels. Loading never writes or creates a file: missing config uses built-in defaults in memory until an explicit save. Explicit saves use version 9.
 
 ```json
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "behaviour": {
     "confirmDismissWhenDirty": true,
     "doublePressReviewShortcuts": true,
@@ -157,6 +157,7 @@ After that field is removed, config versions 1–7 migrate to schema 8 in memory
       "toggle": ["space"],
       "changeQuestionType": ["t"],
       "editCustomAnswer": ["c"],
+      "toggleElaborate": ["e"],
       "nextTab": ["tab", "right"],
       "previousTab": ["shift+tab", "left"],
       "nextOption": ["down"],
@@ -204,7 +205,7 @@ Agents can auto-discover and call `ask_user` when they need clarification instea
 
 ### Interrupted ask forms
 
-If Pi stops while an `ask_user` form is open, the tool call remains without a result. Starting, resuming, or forking that session reopens the newest unresolved form on the active branch. Submitting or elaborating sends the result as a user message because the original tool execution no longer exists. Cancelling dismisses recovery without sending a message to the agent. Either outcome marks that call dismissed and prevents it from automatically reopening again.
+If Pi stops while an `ask_user` form is open, the tool call remains without a result. Starting, resuming, or forking that session reopens the newest unresolved form on the active branch. Recovery restores questions, not answer drafts, and uses the same per-question intent and all-questions-answered rules. Legacy `required` fields are accepted but ignored. Submitting sends the version 2 result as a user message because the original tool execution no longer exists. Cancelling dismisses recovery without sending a message to the agent. Either outcome marks that call dismissed and prevents it from automatically reopening again.
 
 New sessions and extension reloads do not trigger recovery.
 
@@ -213,6 +214,10 @@ You can also talk to pi to configure this extension. When asked to customize pi-
 This package also bundles the `ask-user` skill profile from `skills/ask-user/SKILL.md`. It reinforces when to use the tool, is enabled by default when installed, and can be disabled via `pi config`. The skill was inspired by https://github.com/edlsh/pi-ask-user.
 
 You can still add your own agent instruction if you want to further reinforce usage.
+
+New tool and recovered results use `version: 2` with `answers[id].intent` (`answer` or `elaborate`), full question/option context, and all notes. Cancellation returns empty answers. `required` is no longer advertised in the model schema; legacy inputs accept and ignore it. Historical unversioned results retain their old read-only semantics; remote submissions remain on the legacy protocol for now. See [`docs/interface-upgrade.md`](docs/interface-upgrade.md) for compatibility boundaries.
+
+Result text currently provides basic answer, intent, and note display. Complete contextual text, disambiguation, and model follow-up instructions are deferred to later tickets.
 
 For exact input/output and UX guarantees, see [`docs/contract.md`](docs/contract.md).
 
@@ -290,3 +295,5 @@ Docs stay intentionally small:
 - `docs/README.md` — index
 - `docs/contract.md` — external behavior
 - `docs/architecture.md` — module boundaries and invariants
+- `docs/configuration.md` — settings and keymaps
+- `docs/interface-upgrade.md` — result v2 and legacy compatibility

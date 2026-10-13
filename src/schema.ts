@@ -48,12 +48,6 @@ export const AskQuestionSchema = Type.Object({
 				"Question type: `single` means one answer is expected, `multi` means multiple answers could reasonably be selected, and `preview` means options need preview-pane detail. Use `preview` only when every option includes `preview` text; descriptions alone are not enough.",
 		})
 	),
-	required: Type.Optional(
-		Type.Boolean({
-			description:
-				"Advisory only; marks the question as important but never blocks submission",
-		})
-	),
 	options: Type.Array(AskOptionSchema, {
 		description:
 			"Answer options; provide clear, distinct choices and do not add filler options",

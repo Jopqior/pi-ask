@@ -5,7 +5,6 @@ import type {
 	AskState,
 	AskStateAnswer,
 } from "../types.ts";
-import { isAnswerAnswered } from "./answers.ts";
 
 const CUSTOM_OPTION: AskDisplayOption = {
 	value: OTHER_OPTION_VALUE,
@@ -88,7 +87,34 @@ export function isQuestionAnswered(
 	state: AskState,
 	questionId: string
 ): boolean {
-	return isAnswerAnswered(getAnswer(state, questionId));
+	const question = getQuestionById(state, questionId);
+	const answer = getAnswer(state, questionId);
+	if (!(question && answer)) {
+		return false;
+	}
+	const validSelections = answer.selected.every((selection) => {
+		const option = question.options[selection.index - 1];
+		return (
+			option?.value === selection.value && option.label === selection.label
+		);
+	});
+	const distinctSelections = new Set(
+		answer.selected.map((selection) => selection.value)
+	);
+	if (!validSelections || distinctSelections.size !== answer.selected.length) {
+		return false;
+	}
+	const selectedCustom = Boolean(
+		answer.customSelected && answer.customText?.trim()
+	);
+	const answerCount = answer.selected.length + (selectedCustom ? 1 : 0);
+	return answerCount > 0 && (question.type === "multi" || answerCount === 1);
+}
+
+export function getUnansweredQuestions(state: AskState): AskQuestion[] {
+	return state.questions.filter(
+		(question) => !isQuestionAnswered(state, question.id)
+	);
 }
 
 export function isQuestionNoteOpen(

@@ -54,7 +54,7 @@ test("a type action requires its own confirmation and restarts dirty dismissal",
 	flow.press("\u0003");
 	assert.equal(flow.result()?.cancelled, true);
 	const result = await flow.resultPromise;
-	assert.deepEqual(result.answers.q1?.values, ["a", "b"]);
+	assert.deepEqual(result.answers, {});
 });
 
 test("changing tabs clears dirty-dismiss confirmation", async (t) => {
@@ -78,7 +78,7 @@ test("informational type-change notice does not confirm dirty cancellation", asy
 	assert.equal(flow.result()?.cancelled, true);
 	const result = await flow.resultPromise;
 	assert.equal(result.questions[0]?.presentedType, "single");
-	assert.deepEqual(result.answers.q1?.values, ["a"]);
+	assert.deepEqual(result.answers, {});
 });
 
 test("two type presses still confirm a destructive conversion", async (t) => {
@@ -86,11 +86,13 @@ test("two type presses still confirm a destructive conversion", async (t) => {
 	flow.press("1", "2", "t");
 	assert(flow.text().includes("Press the type key again to confirm"));
 	flow.press("t", "\t", "1", "1");
-
+	assert.equal(flow.result(), undefined);
+	assert(flow.text().includes("[Unanswered]"));
+	flow.press("\x1b[Z", "1", "\t", "1", "1");
 	assert.equal(flow.result()?.cancelled, false);
 	const result = await flow.resultPromise;
 	assert.equal(result.questions[0]?.presentedType, "single");
-	assert.equal(result.answers.q1, undefined);
+	assert.deepEqual(result.answers.q1?.values, ["a"]);
 });
 
 test("dismissal resets a pending destructive type conversion", async (t) => {
@@ -147,7 +149,7 @@ test("disabling dirty confirmation does not disable destructive type confirmatio
 	assert.equal(flow.result()?.cancelled, true);
 	const result = await flow.resultPromise;
 	assert.equal(result.questions[0]?.presentedType, undefined);
-	assert.deepEqual(result.answers.q1?.values, ["a", "b"]);
+	assert.deepEqual(result.answers, {});
 });
 
 test("same-tab movement keeps dirty-dismiss confirmation armed", async (t) => {

@@ -5,7 +5,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	DEFAULT_ASK_CONFIG,
 	normalizeAskConfig,
-	toAskConfigFileV8,
+	toAskConfigFileV9,
 } from "./defaults.ts";
 import { AskConfigMigrationError, migrateAskConfig } from "./migrate.ts";
 import type { AskConfig } from "./schema.ts";
@@ -71,7 +71,7 @@ export class AskConfigStore {
 	async save(config: AskConfig | Partial<AskConfig>): Promise<AskConfig> {
 		const normalized = normalizeAskConfig(config);
 		const content = JSON.stringify(
-			toAskConfigFileV8(normalized),
+			toAskConfigFileV9(normalized),
 			null,
 			2
 		).concat("\n");
@@ -96,7 +96,7 @@ export class AskConfigStore {
 	private async loadFromDisk(): Promise<AskConfigLoadResult> {
 		const sourceFile = await this.readDiskConfig();
 		if (sourceFile === undefined) {
-			return this.loadMissingConfig();
+			return { config: normalizeAskConfig(DEFAULT_ASK_CONFIG) };
 		}
 
 		const parsed = parseJson(sourceFile.content);
@@ -118,22 +118,6 @@ export class AskConfigStore {
 		}
 	}
 
-	private async loadMissingConfig(): Promise<AskConfigLoadResult> {
-		const config = normalizeAskConfig(DEFAULT_ASK_CONFIG);
-		try {
-			await this.save(config);
-			return { config };
-		} catch (saveError) {
-			return {
-				config,
-				notice: {
-					kind: "warning",
-					text: getErrorMessage(saveError),
-				},
-			};
-		}
-	}
-
 	private loadParsedConfig(parsed: unknown, path: string): AskConfigLoadResult {
 		try {
 			const migrated = migrateAskConfig(parsed);
@@ -141,7 +125,7 @@ export class AskConfigStore {
 				config: migrated.config,
 				notice: migrated.notice
 					? {
-							kind: "error",
+							kind: "warning",
 							text: migrated.notice,
 						}
 					: undefined,

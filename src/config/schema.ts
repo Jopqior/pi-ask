@@ -33,6 +33,7 @@ const AskConfigKeymapsSchema = Type.Object({
 		previousTab: Type.Optional(AskKeyBindingSchema),
 		questionNote: Type.Optional(AskKeyBindingSchema),
 		toggle: Type.Optional(AskKeyBindingSchema),
+		toggleElaborate: Type.Optional(AskKeyBindingSchema),
 	}),
 	editor: Type.Object({
 		close: Type.Optional(AskKeyBindingSchema),
@@ -58,8 +59,8 @@ const AskConfigKeymapsSchema = Type.Object({
 	}),
 });
 
-export const AskConfigFileV8Schema = Type.Object({
-	schemaVersion: Type.Literal(8),
+export const AskConfigFileV9Schema = Type.Object({
+	schemaVersion: Type.Literal(9),
 	behaviour: Type.Optional(
 		Type.Object({
 			confirmDismissWhenDirty: Type.Optional(Type.Boolean()),
@@ -77,7 +78,7 @@ export const AskConfigFileV8Schema = Type.Object({
 	),
 });
 
-export type AskConfigFileV8 = Static<typeof AskConfigFileV8Schema>;
+export type AskConfigFileV9 = Static<typeof AskConfigFileV9Schema>;
 
 export type AskNotificationChannel =
 	| "bell"
@@ -110,6 +111,7 @@ export interface AskConfigKeymaps {
 		previousTab: string[];
 		questionNote: string[];
 		toggle: string[];
+		toggleElaborate: string[];
 	};
 	noteEditor: {
 		close: string[];
@@ -141,4 +143,4 @@ export interface AskConfig {
 	};
 }
 
-export const validateAskConfigFileV8 = Compile(AskConfigFileV8Schema);
+export const validateAskConfigFileV9 = Compile(AskConfigFileV9Schema);

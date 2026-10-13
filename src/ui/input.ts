@@ -7,13 +7,14 @@ import {
 	matchesBinding,
 	matchesDigitShortcut,
 } from "../constants/keymaps.ts";
-import { canEditCustomAnswer } from "../state/selectors.ts";
+import { canEditCustomAnswer, isSubmitTab } from "../state/selectors.ts";
 import type { AskState } from "../types.ts";
 
 export type AskInputCommand =
 	| { kind: "moveTab"; delta: 1 | -1 }
 	| { kind: "moveOption"; delta: 1 | -1 }
 	| { kind: "toggleMulti" }
+	| { kind: "toggleQuestionElaborate" }
 	| { kind: "openQuestionNote" }
 	| { kind: "openOptionNote" }
 	| { kind: "confirm" }
@@ -53,12 +54,27 @@ export function getInputCommand(
 
 	const main = getAskContextBindings(config, "main");
 	if (
+		state.view.kind === "navigate" &&
+		state.activeTabIndex < state.questions.length &&
+		matchesBinding(data, main.toggleElaborate)
+	) {
+		return { kind: "toggleQuestionElaborate" };
+	}
+	if (
 		canEditCustomAnswer(state) &&
 		matchesBinding(data, main.editCustomAnswer)
 	) {
 		return { kind: "editCustomAnswer" };
 	}
-	return getNavigationInputCommand(config, data);
+	const command = getNavigationInputCommand(config, data);
+	if (
+		isSubmitTab(state) &&
+		command.kind === "numberShortcut" &&
+		command.digit > 2
+	) {
+		return { kind: "ignore" };
+	}
+	return command;
 }
 
 function getAnswerEditorInputCommand(

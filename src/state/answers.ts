@@ -16,6 +16,7 @@ export function emptyAnswer(): AskStateAnswer {
 
 export function cloneAnswer(answer: AskStateAnswer): AskStateAnswer {
 	return {
+		intent: answer.intent,
 		selected: answer.selected.map(cloneSelection),
 		customSelected: answer.customSelected,
 		customText: answer.customText,
@@ -65,6 +66,7 @@ export function setSingleSelection(
 ): AskStateAnswer {
 	return {
 		...emptyAnswer(),
+		intent: answer.intent,
 		note: answer.note,
 		optionNotes: answer.optionNotes ? { ...answer.optionNotes } : undefined,
 		selected: [
@@ -138,6 +140,7 @@ export function saveOptionNote(
 
 export function isAnswerEmpty(answer: AskStateAnswer): boolean {
 	return (
+		answer.intent !== "elaborate" &&
 		answer.selected.length === 0 &&
 		!answer.customText &&
 		!answer.note &&

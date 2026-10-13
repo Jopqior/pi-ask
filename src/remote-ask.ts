@@ -232,7 +232,13 @@ export function applyRemoteAskResponse(
 	if (response.kind === "cancel") {
 		return {
 			ok: true,
-			state: { ...state, cancelled: true, completed: true },
+			state: {
+				...state,
+				answers: {},
+				resultProtocol: "legacy",
+				cancelled: true,
+				completed: true,
+			},
 		};
 	}
 
@@ -246,6 +252,7 @@ export function applyRemoteAskResponse(
 		state: {
 			...state,
 			answers: validation.answers,
+			resultProtocol: "legacy",
 			activeTabIndex: state.questions.length,
 			activeSubmitActionIndex: response.mode === "elaborate" ? 1 : 0,
 			completed: true,

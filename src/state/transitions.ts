@@ -22,17 +22,19 @@ import {
 	getCurrentQuestion,
 	getQuestionById,
 	getRenderableOptions,
+	getUnansweredQuestions,
 	isSubmitTab,
 } from "./selectors.ts";
 import {
 	inputView,
+	isEditingView,
 	navigateView,
 	optionNoteView,
 	questionNoteView,
 	submitView,
 } from "./view.ts";
 
-const SUBMIT_ACTION_COUNT = 3;
+const SUBMIT_ACTION_COUNT = 2;
 
 export function createInitialState(params: {
 	title?: string;
@@ -76,6 +78,8 @@ export function reduceAskState(state: AskState, action: AskAction): AskState {
 			return confirmCurrentSelection(state);
 		case "TOGGLE_MULTI":
 			return toggleCurrentMultiOption(state);
+		case "TOGGLE_QUESTION_ELABORATE":
+			return toggleQuestionElaborate(state);
 		case "NUMBER_SHORTCUT":
 			return applyNumberShortcut(state, action.digit);
 		case "SAVE_INPUT":
@@ -118,6 +122,17 @@ export function toggleCurrentOption(state: AskState): AskState {
 
 export function toggleCurrentMultiOption(state: AskState): AskState {
 	return toggleCurrentOption(state);
+}
+
+export function toggleQuestionElaborate(state: AskState): AskState {
+	const question = getCurrentQuestion(state);
+	if (!question || isEditingView(state)) {
+		return state;
+	}
+	return updateAnswer(state, question.id, (answer) => ({
+		...answer,
+		intent: answer.intent === "elaborate" ? "answer" : "elaborate",
+	}));
 }
 
 export function confirmCurrentSelection(state: AskState): AskState {
@@ -168,11 +183,14 @@ export function saveNote(state: AskState, rawValue: string): AskState {
 }
 
 function completeSubmitAction(state: AskState): AskState {
-	if (state.activeSubmitActionIndex === 2) {
+	if (state.activeSubmitActionIndex === 1) {
 		return { ...state, cancelled: true, completed: true };
 	}
-	if (state.activeSubmitActionIndex === 1) {
-		return { ...state, mode: "elaborate", completed: true };
+	if (
+		state.activeSubmitActionIndex !== 0 ||
+		getUnansweredQuestions(state).length > 0
+	) {
+		return state;
 	}
 	return { ...state, mode: "submit", completed: true };
 }

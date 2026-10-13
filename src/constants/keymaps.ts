@@ -97,6 +97,7 @@ export const DEFAULT_ASK_KEYMAPS: AskConfigKeymaps = {
 		changeQuestionType: ["t"],
 		editCustomAnswer: ["c"],
 		toggle: ["space"],
+		toggleElaborate: ["e"],
 		nextTab: ["tab", "right"],
 		previousTab: ["shift+tab", "left"],
 		nextOption: ["down"],
@@ -139,6 +140,7 @@ const DESCRIPTIONS: Record<AskKeymapContext, Record<string, string>> = {
 		changeQuestionType: "Change current question type",
 		editCustomAnswer: "Re-edit focused custom answer",
 		toggle: "Toggle selected option",
+		toggleElaborate: "Toggle Elaborate for current question",
 		nextTab: "Switch to next tab",
 		previousTab: "Switch to previous tab",
 		nextOption: "Move to next option/action",
@@ -326,7 +328,7 @@ export function renderFooterKeymaps(
 			footerHint(global.settings, "settings"),
 		],
 		submit: [
-			footerHint(bindings.numberShortcut, "hotkeys"),
+			footerHint(bindings.numberShortcut, "hotkeys", "1-2"),
 			footerHint(main.confirm, "confirm"),
 			footerHint(main.cancel, "cancel"),
 			footerHint(global.settings, "settings"),
@@ -338,6 +340,11 @@ export function renderFooterKeymaps(
 				"question type",
 				footerKeyIdLabel(main.changeQuestionType)
 			),
+			footerHint(
+				main.toggleElaborate,
+				"elaborate",
+				footerKeyIdLabel(main.toggleElaborate)
+			),
 			footerHint(main.confirm, "continue"),
 			footerHint(main.optionNote, "note", noteNavigationLabel),
 			footerHint(main.cancel, "dismiss"),
@@ -348,6 +355,11 @@ export function renderFooterKeymaps(
 				main.changeQuestionType,
 				"question type",
 				footerKeyIdLabel(main.changeQuestionType)
+			),
+			footerHint(
+				main.toggleElaborate,
+				"elaborate",
+				footerKeyIdLabel(main.toggleElaborate)
 			),
 			footerHint(main.confirm, "confirm"),
 			footerHint(main.optionNote, "note", noteNavigationLabel),
@@ -615,6 +627,7 @@ function cloneKeymaps(keymaps: AskConfigKeymaps): AskConfigKeymaps {
 			changeQuestionType: [...keymaps.main.changeQuestionType],
 			editCustomAnswer: [...keymaps.main.editCustomAnswer],
 			toggle: [...keymaps.main.toggle],
+			toggleElaborate: [...keymaps.main.toggleElaborate],
 			nextTab: [...keymaps.main.nextTab],
 			previousTab: [...keymaps.main.previousTab],
 			nextOption: [...keymaps.main.nextOption],
