@@ -25,6 +25,7 @@ const AskConfigKeymapsSchema = Type.Object({
 		cancel: Type.Optional(AskKeyBindingSchema),
 		changeQuestionType: Type.Optional(AskKeyBindingSchema),
 		confirm: Type.Optional(AskKeyBindingSchema),
+		editCustomAnswer: Type.Optional(AskKeyBindingSchema),
 		nextOption: Type.Optional(AskKeyBindingSchema),
 		nextTab: Type.Optional(AskKeyBindingSchema),
 		optionNote: Type.Optional(AskKeyBindingSchema),
@@ -57,8 +58,8 @@ const AskConfigKeymapsSchema = Type.Object({
 	}),
 });
 
-export const AskConfigFileV6Schema = Type.Object({
-	schemaVersion: Type.Literal(6),
+export const AskConfigFileV7Schema = Type.Object({
+	schemaVersion: Type.Literal(7),
 	behaviour: Type.Optional(
 		Type.Object({
 			autoSubmitWhenAnsweredWithoutNotes: Type.Optional(Type.Boolean()),
@@ -77,7 +78,7 @@ export const AskConfigFileV6Schema = Type.Object({
 	),
 });
 
-export type AskConfigFileV6 = Static<typeof AskConfigFileV6Schema>;
+export type AskConfigFileV7 = Static<typeof AskConfigFileV7Schema>;
 
 export type AskNotificationChannel =
 	| "bell"
@@ -102,6 +103,7 @@ export interface AskConfigKeymaps {
 		cancel: string[];
 		changeQuestionType: string[];
 		confirm: string[];
+		editCustomAnswer: string[];
 		nextOption: string[];
 		nextTab: string[];
 		optionNote: string[];
@@ -141,4 +143,4 @@ export interface AskConfig {
 	};
 }
 
-export const validateAskConfigFileV6 = Compile(AskConfigFileV6Schema);
+export const validateAskConfigFileV7 = Compile(AskConfigFileV7Schema);

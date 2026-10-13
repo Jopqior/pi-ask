@@ -95,6 +95,7 @@ export const DEFAULT_ASK_KEYMAPS: AskConfigKeymaps = {
 		confirm: ["enter"],
 		cancel: ["esc"],
 		changeQuestionType: ["t"],
+		editCustomAnswer: ["c"],
 		toggle: ["space"],
 		nextTab: ["tab", "right"],
 		previousTab: ["shift+tab", "left"],
@@ -136,6 +137,7 @@ const DESCRIPTIONS: Record<AskKeymapContext, Record<string, string>> = {
 		confirm: "Confirm selection, continue, or submit",
 		cancel: "Cancel flow",
 		changeQuestionType: "Change current question type",
+		editCustomAnswer: "Re-edit focused custom answer",
 		toggle: "Toggle selected option",
 		nextTab: "Switch to next tab",
 		previousTab: "Switch to previous tab",
@@ -145,7 +147,7 @@ const DESCRIPTIONS: Record<AskKeymapContext, Record<string, string>> = {
 		questionNote: "Edit question note",
 	},
 	editor: {
-		submit: "Submit custom answer",
+		submit: "Save custom answer and stay",
 		close: "Close editor and preserve draft",
 		nextTabWhenEmpty: "Switch to next tab when editor is empty",
 		previousTabWhenEmpty: "Switch to previous tab when editor is empty",
@@ -314,7 +316,7 @@ export function renderFooterKeymaps(
 	const noteNavigationLabel = `${main.optionNote.label}/${main.questionNote.label}`;
 	const hintsByContext: Record<FooterKeymapContext, readonly string[]> = {
 		input: [
-			footerHint(editor.submit, "submit"),
+			footerHint(editor.submit, "save"),
 			footerHint(editor.close, "close"),
 			footerHint(global.settings, "settings"),
 		],
@@ -611,6 +613,7 @@ function cloneKeymaps(keymaps: AskConfigKeymaps): AskConfigKeymaps {
 			confirm: [...keymaps.main.confirm],
 			cancel: [...keymaps.main.cancel],
 			changeQuestionType: [...keymaps.main.changeQuestionType],
+			editCustomAnswer: [...keymaps.main.editCustomAnswer],
 			toggle: [...keymaps.main.toggle],
 			nextTab: [...keymaps.main.nextTab],
 			previousTab: [...keymaps.main.previousTab],

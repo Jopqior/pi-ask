@@ -7,6 +7,7 @@ import {
 	matchesBinding,
 	matchesDigitShortcut,
 } from "../constants/keymaps.ts";
+import { canEditCustomAnswer } from "../state/selectors.ts";
 import type { AskState } from "../types.ts";
 
 export type AskInputCommand =
@@ -18,6 +19,7 @@ export type AskInputCommand =
 	| { kind: "confirm" }
 	| { kind: "cancel" }
 	| { kind: "changeQuestionType" }
+	| { kind: "editCustomAnswer" }
 	| { kind: "dismiss" }
 	| { kind: "showSettings" }
 	| { kind: "numberShortcut"; digit: number }
@@ -49,6 +51,13 @@ export function getInputCommand(
 		return getNoteEditorInputCommand(config, data, editingText);
 	}
 
+	const main = getAskContextBindings(config, "main");
+	if (
+		canEditCustomAnswer(state) &&
+		matchesBinding(data, main.editCustomAnswer)
+	) {
+		return { kind: "editCustomAnswer" };
+	}
 	return getNavigationInputCommand(config, data);
 }
 

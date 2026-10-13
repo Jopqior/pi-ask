@@ -15,6 +15,7 @@ import {
 	cancelFlow,
 	confirmCurrentSelection,
 	dismissFlow,
+	enterInputMode,
 	enterOptionNoteMode,
 	enterQuestionNoteMode,
 	moveOption,
@@ -241,18 +242,26 @@ test("normalization preserves any number of recommended options without selectin
 	assert.deepEqual(state.answers, {});
 });
 
-test("single-select number shortcut stores answer and advances to next tab", () => {
+test("single-select digits select and stay, repeated digits keep the selection", () => {
 	let state = createInitialState(sampleParams());
 	state = applyNumberShortcut(state, 2);
+	state = applyNumberShortcut(state, 2);
 
-	assert.equal(state.answers.lang.selected[0].label, "TypeScript");
-	assert.equal(state.activeTabIndex, 1);
+	assert.deepEqual(
+		state.answers.lang.selected.map((answer) => answer.value),
+		["ts"]
+	);
+	assert.equal(state.activeOptionIndex, 1);
+	assert.equal(state.activeTabIndex, 0);
 	assert.equal(state.view.kind, "navigate");
+
+	state = confirmCurrentSelection(state);
+	assert.equal(state.activeTabIndex, 1);
 });
 
 test("multi-select space toggles current option and enter advances to submit", () => {
 	let state = createInitialState(sampleParams());
-	state = applyNumberShortcut(state, 1);
+	state = confirmCurrentSelection(state);
 	state = toggleCurrentMultiOption(state);
 	assert.deepEqual(
 		state.answers.fe.selected.map((selection) => selection.label),
@@ -443,7 +452,7 @@ test("submit tab can complete in elaborate mode", () => {
 	assert.equal(state.mode, "elaborate");
 });
 
-test("selecting other enters input mode and custom submit stores typed answer", () => {
+test("selecting other enters input mode and custom submit saves without advancing", () => {
 	let state = createInitialState({
 		questions: [
 			{
@@ -459,7 +468,8 @@ test("selecting other enters input mode and custom submit stores typed answer", 
 	state = submitCustomAnswer(state, "my custom answer");
 
 	assert.equal(state.answers.q1.customText, "my custom answer");
-	assert.equal(state.view.kind, "submit");
+	assert.equal(state.view.kind, "navigate");
+	assert.equal(state.activeTabIndex, 0);
 });
 
 test("escape saves typed custom answer without advancing", () => {
@@ -560,7 +570,7 @@ test("empty custom draft clears the stored answer but preserves notes", () => {
 	state = saveNote(state, "question note");
 	state = applyNumberShortcut(state, 2);
 	state = saveCustomAnswer(state, "my answer");
-	state = applyNumberShortcut(state, 2);
+	state = enterInputMode(state, "q1");
 	state = saveCustomAnswer(state, "   ");
 
 	assert.equal(state.answers.q1.customText, undefined);

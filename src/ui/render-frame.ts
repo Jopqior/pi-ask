@@ -1,6 +1,8 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AskConfig } from "../config/schema.ts";
+import { getAskContextBindings } from "../constants/keymaps.ts";
 import {
+	canEditCustomAnswer,
 	getCurrentQuestion,
 	isQuestionAnswered,
 	isSubmitTab,
@@ -206,6 +208,10 @@ function renderFooter(
 			config,
 			question?.type === "multi" ? "multi" : "default"
 		);
+	}
+	if (canEditCustomAnswer(state)) {
+		const binding = getAskContextBindings(config, "main").editCustomAnswer;
+		footer += ` · ${binding.label} re-edit`;
 	}
 	return wrapDelimitedFooterHints(footer, width);
 }

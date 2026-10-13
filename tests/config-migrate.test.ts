@@ -80,6 +80,7 @@ test("config migration maps previous-version config files into current shape", (
 		assert.deepEqual(result.config.keymaps.main.cancel, ["q"], name);
 		assert.deepEqual(result.config.keymaps.main.confirm, ["ctrl+k"], name);
 		assert.deepEqual(result.config.keymaps.main.toggle, ["ctrl+t"], name);
+		assert.deepEqual(result.config.keymaps.main.editCustomAnswer, ["c"], name);
 		assert.deepEqual(result.config.keymaps.editor.submit, ["ctrl+k"], name);
 		assert.deepEqual(result.config.keymaps.editor.close, ["q"], name);
 		assert.deepEqual(result.config.keymaps.noteEditor.save, ["ctrl+k"], name);
@@ -100,8 +101,10 @@ test("config migration preserves v4 and v5 settings and drops obsolete answer co
 			doublePressReviewShortcuts: false,
 			showFooterHints: false,
 		};
+		const { editCustomAnswer: _editCustomAnswer, ...legacyMain } =
+			DEFAULT_ASK_CONFIG.keymaps.main;
 		const main = {
-			...DEFAULT_ASK_CONFIG.keymaps.main,
+			...legacyMain,
 			changeQuestionType: ["ctrl+y"],
 			confirm: ["ctrl+k"],
 		};
@@ -143,11 +146,62 @@ test("config migration preserves v4 and v5 settings and drops obsolete answer co
 			main: {
 				...main,
 				changeQuestionType: schemaVersion === 4 ? ["t"] : ["ctrl+y"],
+				editCustomAnswer: ["c"],
 			},
 		});
 		assert.deepEqual(result.config.notifications, notifications);
 		assert.equal("answer" in raw, true);
 		assert.equal(raw.schemaVersion, schemaVersion);
+	}
+});
+
+test("config migration upgrades v6 with the custom answer binding and preserves settings", () => {
+	const { editCustomAnswer: _editCustomAnswer, ...main } =
+		DEFAULT_ASK_CONFIG.keymaps.main;
+	const keymaps = {
+		...DEFAULT_ASK_CONFIG.keymaps,
+		main: { ...main, confirm: ["ctrl+k"] },
+	};
+	const behaviour = {
+		...DEFAULT_ASK_CONFIG.behaviour,
+		presentSingleAsMulti: true,
+		showFooterHints: false,
+	};
+	const notifications = { channels: ["osc777"], enabled: false };
+	const raw = { schemaVersion: 6, behaviour, keymaps, notifications };
+	const original = structuredClone(raw);
+
+	const result = migrateAskConfig(raw);
+
+	assert.equal(result.migrated, true);
+	assert.equal(result.notice, undefined);
+	assert.deepEqual(result.config, {
+		behaviour,
+		keymaps: { ...keymaps, main: { ...keymaps.main, editCustomAnswer: ["c"] } },
+		notifications,
+	});
+	assert.deepEqual(raw, original);
+});
+
+test("config migration preserves a configured custom answer binding", () => {
+	for (const schemaVersion of [6, 7]) {
+		const keymaps = {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: {
+				...DEFAULT_ASK_CONFIG.keymaps.main,
+				editCustomAnswer: ["ctrl+e"],
+			},
+		};
+
+		const result = migrateAskConfig({
+			...currentConfigFile,
+			keymaps,
+			schemaVersion,
+		});
+
+		assert.equal(result.migrated, schemaVersion === 6);
+		assert.equal(result.notice, undefined);
+		assert.deepEqual(result.config.keymaps, keymaps);
 	}
 });
 

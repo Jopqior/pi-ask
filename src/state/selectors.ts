@@ -45,6 +45,16 @@ export function getCurrentOption(
 	];
 }
 
+export function canEditCustomAnswer(state: AskState): boolean {
+	const question = getCurrentQuestion(state);
+	return (
+		state.view.kind === "navigate" &&
+		!!question &&
+		!!getCurrentOption(state)?.isCustomOption &&
+		!!getAnswer(state, question.id)?.customText?.trim()
+	);
+}
+
 export function getQuestionOptionByValue(
 	question: AskQuestion,
 	optionValue: string

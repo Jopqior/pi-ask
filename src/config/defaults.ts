@@ -4,7 +4,7 @@ import {
 } from "../constants/keymaps.ts";
 import type {
 	AskConfig,
-	AskConfigFileV6,
+	AskConfigFileV7,
 	AskConfigKeymaps,
 	AskNotificationChannel,
 } from "./schema.ts";
@@ -25,7 +25,7 @@ export const DEFAULT_ASK_CONFIG: AskConfig = {
 };
 
 export function normalizeAskConfig(
-	config?: Partial<AskConfigFileV6> | AskConfig
+	config?: Partial<AskConfigFileV7> | AskConfig
 ): AskConfig {
 	return {
 		behaviour: {
@@ -55,10 +55,10 @@ export function normalizeAskConfig(
 	};
 }
 
-export function toAskConfigFileV6(config: AskConfig): AskConfigFileV6 {
+export function toAskConfigFileV7(config: AskConfig): AskConfigFileV7 {
 	const normalized = normalizeAskConfig(config);
 	return {
-		schemaVersion: 6,
+		schemaVersion: 7,
 		behaviour: {
 			autoSubmitWhenAnsweredWithoutNotes:
 				normalized.behaviour.autoSubmitWhenAnsweredWithoutNotes,
@@ -91,6 +91,7 @@ function cloneKeymaps(keymaps: AskConfigKeymaps): AskConfigKeymaps {
 			cancel: [...keymaps.main.cancel],
 			changeQuestionType: [...keymaps.main.changeQuestionType],
 			confirm: [...keymaps.main.confirm],
+			editCustomAnswer: [...keymaps.main.editCustomAnswer],
 			nextOption: [...keymaps.main.nextOption],
 			nextTab: [...keymaps.main.nextTab],
 			optionNote: [...keymaps.main.optionNote],

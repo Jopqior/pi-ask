@@ -1,7 +1,7 @@
 import { normalizeLegacyFlatKeymaps } from "../../constants/keymaps.ts";
 import type { AskConfigMigration, VersionedAskConfigFile } from "./types.ts";
 
-export const CURRENT_ASK_CONFIG_SCHEMA_VERSION = 6;
+export const CURRENT_ASK_CONFIG_SCHEMA_VERSION = 7;
 
 const ASK_CONFIG_MIGRATIONS: AskConfigMigration[] = [
 	{
@@ -54,7 +54,34 @@ const ASK_CONFIG_MIGRATIONS: AskConfigMigration[] = [
 			return { ...current, schemaVersion: 6 };
 		},
 	},
+	{
+		from: 6,
+		to: 7,
+		migrate: (config) => ({
+			...config,
+			keymaps: addV7Keymaps(config.keymaps),
+			schemaVersion: 7,
+		}),
+	},
 ];
+
+function addV7Keymaps(keymaps: unknown): unknown {
+	if (!(keymaps && typeof keymaps === "object" && "main" in keymaps)) {
+		return keymaps;
+	}
+	const current = keymaps as Record<string, unknown>;
+	const main = current.main;
+	if (!(main && typeof main === "object") || "editCustomAnswer" in main) {
+		return keymaps;
+	}
+	return {
+		...current,
+		main: {
+			...main,
+			editCustomAnswer: ["c"],
+		},
+	};
+}
 
 function addV5Keymaps(keymaps: unknown): unknown {
 	if (!(keymaps && typeof keymaps === "object" && "main" in keymaps)) {

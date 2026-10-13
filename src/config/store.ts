@@ -5,7 +5,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	DEFAULT_ASK_CONFIG,
 	normalizeAskConfig,
-	toAskConfigFileV6,
+	toAskConfigFileV7,
 } from "./defaults.ts";
 import { AskConfigMigrationError, migrateAskConfig } from "./migrate.ts";
 import type { AskConfig } from "./schema.ts";
@@ -68,7 +68,7 @@ export class AskConfigStore {
 	async save(config: AskConfig | Partial<AskConfig>): Promise<AskConfig> {
 		const normalized = normalizeAskConfig(config);
 		const content = JSON.stringify(
-			toAskConfigFileV6(normalized),
+			toAskConfigFileV7(normalized),
 			null,
 			2
 		).concat("\n");

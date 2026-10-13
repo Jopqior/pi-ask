@@ -20,7 +20,7 @@ function expectedConfigFile(
 	overrides: { behaviour?: typeof DEFAULT_ASK_CONFIG.behaviour } = {}
 ) {
 	return {
-		schemaVersion: 6,
+		schemaVersion: 7,
 		behaviour: overrides.behaviour ?? DEFAULT_ASK_CONFIG.behaviour,
 		keymaps: DEFAULT_ASK_CONFIG.keymaps,
 		notifications: DEFAULT_ASK_CONFIG.notifications,
@@ -129,6 +129,25 @@ test("config store writes full normalized config on save", async () => {
 	await rm(dirname(path), { force: true, recursive: true });
 });
 
+test("config store saves and reloads a configured custom answer binding", async (t) => {
+	const path = await makeTempPath("pi-ask-config-custom-answer-");
+	t.after(() => rm(dirname(path), { force: true, recursive: true }));
+	const keymaps = {
+		...DEFAULT_ASK_CONFIG.keymaps,
+		main: { ...DEFAULT_ASK_CONFIG.keymaps.main, editCustomAnswer: ["ctrl+e"] },
+	};
+	const store = new AskConfigStore(path);
+
+	await store.save({ ...DEFAULT_ASK_CONFIG, keymaps });
+	const saved = JSON.parse(await readFile(path, "utf-8"));
+	assert.equal(saved.schemaVersion, 7);
+	assert.deepEqual(saved.keymaps.main.editCustomAnswer, ["ctrl+e"]);
+
+	const result = await new AskConfigStore(path).ensureLoaded();
+	assert.equal(result.notice, undefined);
+	assert.deepEqual(result.config.keymaps, keymaps);
+});
+
 test("config store reports friendly save failures", async () => {
 	const path = await makeTempPath("pi-ask-config-save-failure-");
 	await mkdir(path, { recursive: true });
@@ -203,12 +222,86 @@ test("config store loads migrated config without rewriting and saves without ans
 	const saved = JSON.parse(await readFile(path, "utf-8"));
 	assert.equal("answer" in saved, false);
 	assert.deepEqual(saved, {
-		schemaVersion: 6,
+		schemaVersion: 7,
 		behaviour,
 		keymaps,
 		notifications,
 	});
 	await rm(dirname(path), { force: true, recursive: true });
+});
+
+test("config store loads v6 with the custom answer binding without rewriting", async (t) => {
+	const path = await makeTempPath("pi-ask-config-v6-");
+	t.after(() => rm(dirname(path), { force: true, recursive: true }));
+	const { editCustomAnswer: _editCustomAnswer, ...main } =
+		DEFAULT_ASK_CONFIG.keymaps.main;
+	const content = JSON.stringify({
+		...expectedConfigFile(),
+		keymaps: { ...DEFAULT_ASK_CONFIG.keymaps, main },
+		schemaVersion: 6,
+	});
+	await writeFile(path, content);
+	const store = new AskConfigStore(path);
+
+	const result = await store.ensureLoaded();
+
+	assert.equal(result.notice, undefined);
+	assert.deepEqual(result.config.keymaps.main.editCustomAnswer, ["c"]);
+	assert.equal(await readFile(path, "utf-8"), content);
+
+	await store.save(result.config);
+	const saved = JSON.parse(await readFile(path, "utf-8"));
+	assert.equal(saved.schemaVersion, 7);
+	assert.deepEqual(saved.keymaps.main.editCustomAnswer, ["c"]);
+});
+
+test("config store preserves settings and disk on migrated custom answer key collisions", async (t) => {
+	for (const context of ["main", "global"] as const) {
+		await t.test(context, async (subtest) => {
+			const path = await makeTempPath("pi-ask-config-v6-collision-");
+			subtest.after(() => rm(dirname(path), { force: true, recursive: true }));
+			const { editCustomAnswer: _editCustomAnswer, ...main } =
+				DEFAULT_ASK_CONFIG.keymaps.main;
+			const behaviour = {
+				...DEFAULT_ASK_CONFIG.behaviour,
+				autoSubmitWhenAnsweredWithoutNotes: true,
+				confirmDismissWhenDirty: false,
+				presentSingleAsMulti: true,
+				showFooterHints: false,
+			};
+			const notifications = { channels: ["osc777"], enabled: false };
+			const content = JSON.stringify({
+				schemaVersion: 6,
+				behaviour,
+				keymaps: {
+					...DEFAULT_ASK_CONFIG.keymaps,
+					global: {
+						...DEFAULT_ASK_CONFIG.keymaps.global,
+						...(context === "global" ? { settings: ["c"] } : {}),
+					},
+					main: {
+						...main,
+						cancel: ["q"],
+						...(context === "main" ? { optionNote: ["c"] } : {}),
+					},
+				},
+				notifications,
+			});
+			await writeFile(path, content);
+			const store = new AskConfigStore(path);
+
+			const result = await store.ensureLoaded();
+
+			assert.deepEqual(result.config, {
+				behaviour,
+				keymaps: DEFAULT_ASK_CONFIG.keymaps,
+				notifications,
+			});
+			assert.match(result.notice?.text ?? "", DEFAULT_KEYMAPS_NOTICE_PATTERN);
+			assert.equal(await readFile(path, "utf-8"), content);
+			assert.deepEqual(await readdir(dirname(path)), ["eko24ive-pi-ask.json"]);
+		});
+	}
 });
 
 test("config store reads legacy root config without copying it", async () => {

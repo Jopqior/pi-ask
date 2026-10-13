@@ -29,6 +29,58 @@ function plainTheme() {
 	} as never;
 }
 
+test("re-edit hint appears only for focused saved custom answers and follows the keymap", () => {
+	const initial = createInitialState({
+		questions: [
+			{ id: "q1", prompt: "One", options: [{ value: "a", label: "A" }] },
+		],
+	});
+	const saved = {
+		...initial,
+		activeOptionIndex: 1,
+		answers: {
+			q1: { selected: [], customText: "saved", customSelected: true },
+		},
+	};
+	const config = {
+		...DEFAULT_ASK_CONFIG,
+		keymaps: {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: { ...DEFAULT_ASK_CONFIG.keymaps.main, editCustomAnswer: ["x"] },
+		},
+	};
+	const render = (state: typeof initial) =>
+		renderAskScreen({
+			config,
+			state,
+			theme: plainTheme(),
+			width: 120,
+			editor: mockEditor(),
+		}).join("\n");
+	assert.equal(render(saved).includes("X re-edit"), true);
+	assert.equal(render(saved).includes("C re-edit"), false);
+	assert.equal(
+		render({ ...saved, activeOptionIndex: 0 }).includes("re-edit"),
+		false
+	);
+	assert.equal(
+		render({ ...initial, activeOptionIndex: 1 }).includes("re-edit"),
+		false
+	);
+	assert.equal(
+		render({ ...saved, view: { kind: "input", questionId: "q1" } }).includes(
+			"re-edit"
+		),
+		false
+	);
+	assert.equal(
+		render({ ...saved, activeTabIndex: 1, view: { kind: "submit" } }).includes(
+			"re-edit"
+		),
+		false
+	);
+});
+
 test("wide header keeps all tabs and framing arrows on the tab row", () => {
 	const state = createInitialState({
 		title: "Demo",

@@ -25,6 +25,66 @@ function inputState() {
 	return state;
 }
 
+test("custom re-edit is configurable and only active on a saved custom row", () => {
+	const initial = createInitialState({
+		questions: [
+			{ id: "q1", prompt: "Question?", options: [{ value: "a", label: "A" }] },
+		],
+	});
+	const saved = {
+		...initial,
+		activeOptionIndex: 1,
+		answers: {
+			q1: { selected: [], customText: "saved answer", customSelected: true },
+		},
+	};
+	const config = {
+		...DEFAULT_ASK_CONFIG,
+		keymaps: {
+			...DEFAULT_ASK_CONFIG.keymaps,
+			main: { ...DEFAULT_ASK_CONFIG.keymaps.main, editCustomAnswer: ["x"] },
+		},
+	};
+	assert.deepEqual(getInputCommand(saved, DEFAULT_ASK_CONFIG, "c"), {
+		kind: "editCustomAnswer",
+	});
+	assert.deepEqual(getInputCommand(saved, config, "x"), {
+		kind: "editCustomAnswer",
+	});
+	assert.deepEqual(getInputCommand(saved, config, "c"), { kind: "ignore" });
+	assert.deepEqual(
+		getInputCommand(
+			{ ...saved, activeOptionIndex: 0 },
+			DEFAULT_ASK_CONFIG,
+			"c"
+		),
+		{ kind: "ignore" }
+	);
+	assert.deepEqual(
+		getInputCommand(
+			{ ...initial, activeOptionIndex: 1 },
+			DEFAULT_ASK_CONFIG,
+			"c"
+		),
+		{ kind: "ignore" }
+	);
+	assert.deepEqual(
+		getInputCommand(
+			{ ...saved, activeTabIndex: 1, view: { kind: "submit" } },
+			DEFAULT_ASK_CONFIG,
+			"c"
+		),
+		{ kind: "ignore" }
+	);
+	assert.deepEqual(getInputCommand(inputState(), DEFAULT_ASK_CONFIG, "c", ""), {
+		kind: "delegateToEditor",
+	});
+	assert.deepEqual(
+		getInputCommand(inputState(), DEFAULT_ASK_CONFIG, "c", "text"),
+		{ kind: "delegateToEditor" }
+	);
+});
+
 test("empty typing mode uses arrows and tab for navigation", () => {
 	const input = inputState();
 
@@ -315,6 +375,7 @@ test("custom editor submit key controls actual editor submission", async () => {
 	component?.handleInput("x");
 	component?.handleInput("\r");
 	component?.handleInput("\u000b");
+	component?.handleInput("\r");
 	component?.handleInput("\r");
 	const result = await resultPromise;
 

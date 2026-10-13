@@ -77,7 +77,7 @@ test("renderEditorBlock reapplies background after editor reset sequences", () =
 test("editing footers do not advertise tab navigation", () => {
 	assert.equal(
 		renderFooterText(DEFAULT_ASK_CONFIG, "input"),
-		" Enter submit · Esc close · ? settings"
+		" Enter save · Esc close · ? settings"
 	);
 	assert.equal(
 		renderFooterText(DEFAULT_ASK_CONFIG, "note"),

@@ -3,7 +3,7 @@
 # @jopqior/pi-ask
 
 [![npm downloads](https://badgen.net/npm/dm/@jopqior/pi-ask)](https://www.npmjs.com/package/@jopqior/pi-ask)
-[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=bbe41e766bb39f5e21f7cf18505fcf6e653a389c)](https://github.com/Jopqior/pi-ask/commits/main)
+[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=e5eea656c55f5acdd7274a7340ca5580867c6aac)](https://github.com/Jopqior/pi-ask/commits/main)
 [![stars](https://badgen.net/github/stars/Jopqior/pi-ask)](https://github.com/Jopqior/pi-ask/stargazers)
 
 > [!IMPORTANT]
@@ -98,7 +98,9 @@ Use a dedicated preview pane when options need richer detail.
 ![Preview question showing a dedicated preview pane](docs/media/feature-preview-pane.png)
 
 ### Custom answer (`Type your own`)
-Capture free-form input inline without leaving the flow.
+Capture free-form input inline without leaving the flow. Number keys or Up/Down open an empty `Type your own` row automatically; saved text stays closed. With the saved custom row focused, press `c` (`main.editCustomAnswer`) to edit it again. This shortcut is shown and active only on that row; inside the editor, `c` is ordinary text and native completion remains available.
+
+Enter saves the text and leaves focus on the custom row. A second Enter confirms it and advances on single-select (including preview) without overwriting the text. On multi-select, digits and Space toggle the saved custom answer; Enter advances without reselecting a deselected draft.
 
 ![Inline custom answer input for Type your own option](docs/media/feature-custom-answer-input.png)
 
@@ -114,7 +116,7 @@ Each action accepts a key string or an array of aliases.
 Default contexts:
 
 - `global`: `dismiss` (`Ctrl+C`) and `settings` (`?`)
-- `main`: confirm/cancel/toggle, tab navigation, option navigation, and note shortcuts
+- `main`: confirm/cancel/toggle, custom-answer editing (`c`), tab navigation, option navigation, and note shortcuts
 - `editor`: custom answer submit/close and empty-editor navigation
 - `noteEditor`: note save/close and empty-editor navigation
 - `settingsModal`: close, next/previous setting, and toggle
@@ -128,13 +130,17 @@ Fixed bindings:
 | `@` | Editors | File-reference affordance |
 | Arrow keys / `Tab` | Non-empty editor | Stay in editor for cursor movement |
 
+On single-select questions (including preview), number keys select and stay on the question; repeating the same digit keeps the answer selected. Space toggles without advancing. Enter selects the highlighted normal option and advances. Multi-select retains digit/Space toggling and Enter advances.
+
 Review-tab shortcuts can optionally require the same number key twice via `behaviour.doublePressReviewShortcuts`. `behaviour.presentSingleAsMulti` can render future single-select questions as multi-select while preserving the requested type in results; use `main.changeQuestionType` (`t` by default) to change the active question type live.
 
-You can edit the config file yourself, ask pi to edit it for you, or use `/ask-settings` to find the exact config path, toggle behaviour/notification settings, or reset config to defaults with a guarded double press. pi-ask treats the config file as user-owned: load-time migrations and invalid files are handled in memory without rewriting or backing up the file, and read-only/externally managed configs fail gracefully with a manual-edit message.
+You can edit the config file yourself, ask pi to edit it for you, or use `/ask-settings` to find the exact config path, toggle behaviour/notification settings, or reset config to defaults with a guarded double press. pi-ask treats the config file as user-owned: load-time migrations and invalid files are handled in memory without rewriting or backing up the file, and read-only/externally managed configs fail gracefully with a manual-edit message. Destructive type changes, dirty dismissal, review shortcuts, and settings reset keep independent confirmation guards; none can confirm another.
+
+Config versions 1–6 migrate to schema 7 in memory, adding `main.editCustomAnswer: ["c"]` only when missing and preserving existing bindings and other settings. A key collision triggers a warning and falls back to the full default keymaps while retaining valid behaviour and notification channels. Loading never rewrites the file; explicit saves use version 7.
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "behaviour": {
     "autoSubmitWhenAnsweredWithoutNotes": false,
     "confirmDismissWhenDirty": true,
@@ -149,6 +155,7 @@ You can edit the config file yourself, ask pi to edit it for you, or use `/ask-s
       "cancel": ["esc"],
       "toggle": ["space"],
       "changeQuestionType": ["t"],
+      "editCustomAnswer": ["c"],
       "nextTab": ["tab", "right"],
       "previousTab": ["shift+tab", "left"],
       "nextOption": ["down"],

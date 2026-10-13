@@ -7,7 +7,10 @@ import {
 	submitEditorDraft,
 	syncStateToSelection,
 } from "../src/state/editor.ts";
-import { enterQuestionNoteMode } from "../src/state/transitions.ts";
+import {
+	confirmCurrentSelection,
+	enterQuestionNoteMode,
+} from "../src/state/transitions.ts";
 
 test("syncStateToSelection opens input when custom option is active", () => {
 	const state = {
@@ -47,7 +50,7 @@ test("saveEditorDraft stores question note drafts without advancing", () => {
 	assert.equal(next.answers.q1.note, "needs examples");
 });
 
-test("submitEditorDraft advances submitted custom answers", () => {
+test("custom Enter saves and stays until a second Enter confirms without replacing it", () => {
 	const state = syncStateToSelection({
 		...createInitialState({
 			questions: [
@@ -63,7 +66,14 @@ test("submitEditorDraft advances submitted custom answers", () => {
 
 	const next = submitEditorDraft(state, "custom answer");
 	assert.equal(next.answers.q1.customText, "custom answer");
-	assert.equal(next.view.kind, "submit");
+	assert.equal(next.activeOptionIndex, 1);
+	assert.equal(next.view.kind, "navigate");
+	assert.equal(next.activeTabIndex, 0);
+
+	const confirmed = confirmCurrentSelection(next);
+	assert.equal(confirmed.view.kind, "submit");
+	assert.equal(confirmed.answers.q1.customText, "custom answer");
+	assert.deepEqual(confirmed.answers.q1.selected, []);
 });
 
 test("syncStateToSelection does not reopen answered custom input", () => {

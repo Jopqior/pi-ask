@@ -24,6 +24,7 @@ import {
 import { cycleCurrentQuestionType } from "../state/question-type.ts";
 import { toAskResult } from "../state/result.ts";
 import {
+	canEditCustomAnswer,
 	getCurrentOption,
 	getCurrentQuestion,
 	isSubmitTab,
@@ -33,6 +34,7 @@ import {
 	cancelFlow,
 	confirmCurrentSelection,
 	dismissFlow,
+	enterInputMode,
 	enterOptionNoteMode,
 	enterQuestionNoteMode,
 	moveOption,
@@ -89,6 +91,7 @@ interface AskFlowController {
 	dismissNotice?: string;
 	done: Done;
 	editor: Editor;
+	pendingDismissConfirmation: boolean;
 	pendingQuestionTypeChangeQuestionId?: string;
 	pendingReviewShortcutActionIndex?: number;
 	remoteFlow?: RemoteAskFlowHandle;
@@ -149,6 +152,7 @@ function createAskFlowController(
 		settingsOpen: false,
 		state: createInitialState(params, params.flowOptions),
 		suppressAutoInputForSelection: false,
+		pendingDismissConfirmation: false,
 		pendingQuestionTypeChangeQuestionId: undefined,
 		pendingReviewShortcutActionIndex: undefined,
 		theme,
@@ -296,6 +300,9 @@ function handleNavigationCommand(
 			clearReviewShortcutPending(controller);
 			handleChangeQuestionType(controller);
 			return;
+		case "editCustomAnswer":
+			openCustomAnswer(controller);
+			return;
 		case "openQuestionNote":
 			clearQuestionTypeChangePending(controller);
 			openQuestionNote(controller);
@@ -324,7 +331,8 @@ function handleNavigationCommand(
 			clearQuestionTypeChangePending(controller);
 			commitState(
 				controller,
-				applyNumberShortcut(controller.state, command.digit)
+				applyNumberShortcut(controller.state, command.digit),
+				{ finish: true }
 			);
 			return;
 		case "dismiss":
@@ -347,6 +355,15 @@ function handleNavigationCommand(
 	}
 }
 
+function openCustomAnswer(controller: AskFlowController) {
+	clearReviewShortcutPending(controller);
+	clearQuestionTypeChangePending(controller);
+	const question = getCurrentQuestion(controller.state);
+	if (question && canEditCustomAnswer(controller.state)) {
+		commitState(controller, enterInputMode(controller.state, question.id));
+	}
+}
+
 function handleToggleCurrentOption(controller: AskFlowController) {
 	const question = getCurrentQuestion(controller.state);
 	if (!question) {
@@ -356,6 +373,7 @@ function handleToggleCurrentOption(controller: AskFlowController) {
 }
 
 function handleChangeQuestionType(controller: AskFlowController) {
+	controller.pendingDismissConfirmation = false;
 	const question = getCurrentQuestion(controller.state);
 	if (!question || isSubmitTab(controller.state)) {
 		return;
@@ -459,10 +477,11 @@ function handleExitFlow(controller: AskFlowController, nextState: AskState) {
 		commitState(controller, nextState, { finish: true });
 		return;
 	}
-	if (shouldDiscardAfterConfirmation(!!controller.dismissNotice)) {
+	if (shouldDiscardAfterConfirmation(controller.pendingDismissConfirmation)) {
 		commitState(controller, nextState, { finish: true });
 		return;
 	}
+	controller.pendingDismissConfirmation = true;
 	controller.dismissNotice = DIRTY_DISMISS_NOTICE;
 	refresh(controller);
 }
@@ -482,6 +501,7 @@ function shouldRequestDismissConfirmation(
 function clearFooterNotices(controller: AskFlowController) {
 	controller.configNotice = undefined;
 	controller.dismissNotice = undefined;
+	controller.pendingDismissConfirmation = false;
 }
 
 function clearReviewShortcutPending(controller: AskFlowController) {

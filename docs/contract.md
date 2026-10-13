@@ -185,7 +185,7 @@ This document defines the stable external behavior. It does not explain internal
 - on single-select questions, saving free-form text clears selected options for that question
 - on multi-select questions, `values` and `labels` include both selected options and `customText` when both are present
 - on multi-select questions, selected options keep their original order and `customText` is appended last
-- submitting free-form text on a multi-select question stays on the same question tab and marks the custom row selected
+- saving free-form text stays on the same question tab with the custom row focused and selected; deselecting saved custom text retains the draft but omits it from the result
 - on multi-select questions, toggling an empty custom row opens the free-form editor, while toggling a custom row with saved free-form text selects or deselects it without opening the editor or clearing the text
 - saving or clearing free-form text on a multi-select question does not clear other selected options
 - `note` stores a question-level note
@@ -235,6 +235,12 @@ Main flow:
 - `main.nextTab` / `main.previousTab` move between tabs; defaults: `Tab`/`Right`, `Shift+Tab`/`Left`
 - `main.nextOption` / `main.previousOption` move between options or review actions; defaults: `Down`, `Up`
 - `main.confirm`, `main.cancel`, and `main.toggle` confirm, cancel, or toggle; defaults: `Enter`, `Esc`, `Space`
+- on single-select questions (including preview), digits select without advancing and repeated digits are idempotent; `Space` toggles without advancing; `Enter` selects the highlighted normal option and advances
+- on multi-select questions, digits/`Space` toggle options and `Enter` advances without changing selections
+- focusing an empty custom row with digits or Up/Down automatically opens its editor; saved custom text does not reopen on focus
+- `main.editCustomAnswer` (default `c`) is shown and active only on the focused saved custom row and reopens its text for editing
+- on single-select (including preview), `Enter` on saved custom text confirms it and advances without overwriting it; digits select it idempotently and `Space` toggles it
+- on multi-select, digits/`Space` toggle saved custom text; `Enter` advances without reselecting a deselected draft
 - `main.changeQuestionType` changes the active question type (non-preview: `single <-> multi`; preview: `preview <-> multi`); default: `t`; destructive `multi -> single` changes require pressing the type hotkey again, with no timeout, and the pending confirmation clears on other navigation/actions
 - `main.optionNote` and `main.questionNote` open option/question notes; defaults: `n`, `Shift+N`
 - `1..9` is fixed and selects or toggles the matching option; on the review tab, `1`, `2`, and `3` trigger `Submit`, `Elaborate`, and `Cancel`
@@ -242,14 +248,14 @@ Main flow:
 
 Editing flow:
 
-- `editor.submit` submits the current custom-answer editor input and closes the editor; default: `Enter`
+- `editor.submit` saves and closes the custom-answer editor, staying on the question with focus on the custom row; default: `Enter`; a second `Enter` confirms/advances as described above
 - `noteEditor.save` saves the current note editor and keeps the ask flow open; default: `Enter`
 - `editor.close` / `noteEditor.close` save draft and close the editor; default: `Esc`
 - `global.dismiss` dismisses the entire flow immediately without saving the current editor draft when no dirty-dismiss confirmation is pending
 - `global.settings` opens ask settings when the editor is empty; otherwise the key is delegated to the editor as text/input
 - when editor has text, arrow keys and `Tab` stay in the editor so the cursor can move while typing
 - when editor is empty, editor-context `*WhenEmpty` navigation actions move options or tabs without requiring the editor close binding first
-- `@` remains a fixed file-reference affordance in editors
+- `c` is ordinary text inside editors; native completion and the fixed `@` file-reference affordance remain available
 
 Settings modal:
 
@@ -261,6 +267,15 @@ Dirty dismiss:
 
 - when `Confirm dismiss when dirty` is enabled, cancelling or dismissing a dirty ask flow requires the same action a second time
 - the dirty-dismiss warning stays visible until the user changes tabs in the ask flow
+
+Destructive type changes, dirty dismissal, review double presses, and settings reset retain independent confirmation guards; no action can confirm another guard.
+
+## Config version
+
+- current persisted schema is version 7; explicit saves write version 7
+- versions 1–6 migrate in memory, adding missing `main.editCustomAnswer: ["c"]` while preserving existing bindings and other settings; obsolete `answer` settings remain discarded
+- invalid keymaps, including collisions introduced by the new default binding, fall back to the full default keymaps with a warning while preserving valid behaviour and notification settings/channels
+- loading or migrating never rewrites the config file
 
 ## Non-TUI and non-interactive modes
 

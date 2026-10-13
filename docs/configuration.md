@@ -22,7 +22,7 @@ Older pi-ask versions wrote this file at `~/.pi/agent/eko24ive-pi-ask.json`. If 
 
 ## Config versions and migrations
 
-`schemaVersion` identifies the persisted config shape; the current version is `6`. Versions `1`–`5` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section. Loading never rewrites the file; an explicit save writes version `6` without that section.
+`schemaVersion` identifies the persisted config shape; the current version is `7`. Versions `1`–`6` migrate in memory before validation, preserving other settings and adding missing defaults while discarding the obsolete `answer` section from versions `1`–`5`. Version `6` gains `main.editCustomAnswer: ["c"]` only when that action is missing; existing bindings are preserved. Loading never rewrites the file; an explicit save writes version `7`.
 
 Unsupported future versions or invalid files are left unchanged and defaults are loaded for the current session. Fix the file, then run `/reload` or restart pi.
 
@@ -30,7 +30,7 @@ Unsupported future versions or invalid files are left unchanged and defaults are
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "behaviour": {
     "autoSubmitWhenAnsweredWithoutNotes": false,
     "confirmDismissWhenDirty": true,
@@ -45,6 +45,7 @@ Unsupported future versions or invalid files are left unchanged and defaults are
       "cancel": ["esc"],
       "toggle": ["space"],
       "changeQuestionType": ["t"],
+      "editCustomAnswer": ["c"],
       "nextTab": ["tab", "right"],
       "previousTab": ["shift+tab", "left"],
       "nextOption": ["down"],
@@ -184,6 +185,7 @@ Arrays are aliases: any listed key triggers the same action.
     "confirm": ["enter"],
     "cancel": ["esc"],
     "changeQuestionType": ["t"],
+    "editCustomAnswer": ["c"],
     "toggle": ["space"],
     "nextTab": ["tab", "right"],
     "previousTab": ["shift+tab", "left"],
@@ -224,6 +226,16 @@ Arrays are aliases: any listed key triggers the same action.
 - `editor`: custom answer editor
 - `noteEditor`: question/option note editor
 - `settingsModal`: `/ask-settings` and `?` settings overlay
+
+### `main.editCustomAnswer`
+
+- default: `["c"]`
+- shown and active only when the custom row has focus and contains saved text
+- effect: reopens that text in the custom-answer editor
+- empty custom rows open automatically on digit/Up/Down focus; saved rows do not
+- Enter saves and stays on the custom row; a second Enter confirms/advances without replacing the text
+- inside editors, `c` remains ordinary text; editor navigation and file completion are unchanged
+- applies to question tabs, not the review tab
 
 ### Allowed bindings
 
@@ -276,7 +288,10 @@ If configured keymaps are invalid:
 - invalid `keymaps` fall back to default keymaps for the current session
 - ask remains usable
 - a warning notice is shown
+- the config file is left unchanged
 - after fixing the file, run `/reload` or restart pi
+
+This also applies when a migrated version `6` config gains `main.editCustomAnswer: ["c"]` and that key conflicts with an existing `main` or `global` binding. The whole keymap falls back to defaults, rather than silently remapping either action.
 
 Invalid keymaps include:
 
@@ -290,7 +305,7 @@ Invalid keymaps include:
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "behaviour": {
     "autoSubmitWhenAnsweredWithoutNotes": true,
     "confirmDismissWhenDirty": true,
@@ -308,6 +323,7 @@ Invalid keymaps include:
       "cancel": ["q"],
       "toggle": ["ctrl+t"],
       "changeQuestionType": ["t"],
+      "editCustomAnswer": ["c"],
       "nextTab": ["tab", "right"],
       "previousTab": ["shift+tab", "left"],
       "nextOption": ["down"],
@@ -355,7 +371,8 @@ Invalid keymaps include:
 When editing this config for a user:
 
 - preserve unrelated fields
-- set `schemaVersion` to `6` and remove the obsolete `answer` section when saving an older config
+- set `schemaVersion` to `7` and remove the obsolete `answer` section when saving an older config
+- add `main.editCustomAnswer` when missing; use `["c"]` unless it conflicts with another binding, in which case ask the user which key to use
 - do not assign fixed numeric shortcuts (`1` through `9`) to configurable actions
 - do not create duplicate bindings within a context or between `global` and `main`, `editor`, or `noteEditor`
 - preserve existing `notifications.channels` unless the user asks to change notification targets

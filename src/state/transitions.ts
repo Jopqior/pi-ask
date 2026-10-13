@@ -1,7 +1,6 @@
 import type { AskAction, AskState } from "../types.ts";
 import {
 	emptyAnswer,
-	isAnswerAnswered,
 	isAnswerEmpty,
 	saveCustomText,
 	saveOptionNote,
@@ -80,7 +79,7 @@ export function reduceAskState(state: AskState, action: AskAction): AskState {
 		case "NUMBER_SHORTCUT":
 			return applyNumberShortcut(state, action.digit);
 		case "SAVE_INPUT":
-			return saveInputValue(state, action.value, action.submit ?? false);
+			return saveInputValue(state, action.value);
 		case "SAVE_NOTE":
 			return saveNoteValue(state, action.value);
 		case "CANCEL":
@@ -154,14 +153,14 @@ export function applyNumberShortcut(state: AskState, digit: number): AskState {
 }
 
 export function saveCustomAnswer(state: AskState, rawValue: string): AskState {
-	return saveInputValue(state, rawValue, false);
+	return saveInputValue(state, rawValue);
 }
 
 export function submitCustomAnswer(
 	state: AskState,
 	rawValue: string
 ): AskState {
-	return saveInputValue(state, rawValue, true);
+	return saveInputValue(state, rawValue);
 }
 
 export function saveNote(state: AskState, rawValue: string): AskState {
@@ -213,7 +212,7 @@ function activateCurrentOption(
 		}
 		return setSingleSelection(answer, option, state.activeOptionIndex);
 	});
-	return trigger === "toggle" ? nextState : advanceToNextTab(nextState);
+	return trigger === "confirm" ? advanceToNextTab(nextState) : nextState;
 }
 
 function activateCustomOption(
@@ -222,22 +221,27 @@ function activateCustomOption(
 	questionType: AskState["questions"][number]["type"],
 	trigger: "toggle" | "confirm" | "digit"
 ): AskState {
-	if (questionType === "multi" && trigger !== "confirm") {
-		const answer = getAnswer(state, questionId);
-		if (answer?.customText?.trim()) {
-			return updateAnswer(state, questionId, (currentAnswer) =>
-				setCustomSelected(currentAnswer, !answer.customSelected)
-			);
-		}
+	const answer = getAnswer(state, questionId);
+	if (!answer?.customText?.trim()) {
+		return setView(state, inputView(questionId));
 	}
-	return setView(state, inputView(questionId));
+	if (questionType === "multi") {
+		if (trigger === "confirm") {
+			return advanceToNextTab(state);
+		}
+		return updateAnswer(state, questionId, (currentAnswer) =>
+			setCustomSelected(currentAnswer, !answer.customSelected)
+		);
+	}
+	const nextState = updateAnswer(state, questionId, (currentAnswer) => ({
+		...currentAnswer,
+		selected: [],
+		customSelected: trigger === "toggle" ? !answer.customSelected : true,
+	}));
+	return trigger === "confirm" ? advanceToNextTab(nextState) : nextState;
 }
 
-function saveInputValue(
-	state: AskState,
-	rawValue: string,
-	submit: boolean
-): AskState {
+function saveInputValue(state: AskState, rawValue: string): AskState {
 	if (state.view.kind !== "input") {
 		return state;
 	}
@@ -247,8 +251,11 @@ function saveInputValue(
 		return exitEditingView(state);
 	}
 
-	const nextState = updateAnswer(
-		exitEditingView(state),
+	return updateAnswer(
+		{
+			...exitEditingView(state),
+			activeOptionIndex: question.options.length,
+		},
 		question.id,
 		(answer) =>
 			saveCustomText(
@@ -257,13 +264,6 @@ function saveInputValue(
 				question.type === "multi" ? "multi" : "single"
 			)
 	);
-	if (
-		question.type === "multi" ||
-		!(submit && isAnswerAnswered(nextState.answers[question.id]))
-	) {
-		return nextState;
-	}
-	return advanceToNextTab(nextState);
 }
 
 function saveNoteValue(state: AskState, rawValue: string): AskState {

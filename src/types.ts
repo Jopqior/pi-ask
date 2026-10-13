@@ -163,6 +163,6 @@ export type AskAction =
 	| { type: "CONFIRM" }
 	| { type: "TOGGLE_MULTI" }
 	| { type: "NUMBER_SHORTCUT"; digit: number }
-	| { type: "SAVE_INPUT"; value: string; submit?: boolean }
+	| { type: "SAVE_INPUT"; value: string }
 	| { type: "SAVE_NOTE"; value: string }
 	| { type: "CANCEL" };

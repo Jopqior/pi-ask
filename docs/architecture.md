@@ -68,6 +68,7 @@ The codebase is split so the implementation reads through file boundaries and na
 
 - submit is never blocked by unanswered questions
 - single-select answers serialize as arrays
+- single-select (including preview) digits select idempotently without advancing, Space toggles without advancing, and Enter selects/confirms then advances; multi-select digits/Space toggle and Enter advances without changing selections
 - when `behaviour.presentSingleAsMulti` is enabled, future single-select questions are handled with multi-select state semantics while result metadata preserves the requested `type` and adds `presentedType`
 - active-flow question type changes are per-question runtime overrides handled in state/controller logic; they do not mutate the stored source payload or global config
 - single-select free-form answers replace selected options for that question
@@ -76,13 +77,17 @@ The codebase is split so the implementation reads through file boundaries and na
 - deselected option notes stay in UI state
 - only selected option notes are emitted in the final result
 - editor lifecycle stays in the controller, not in the reducers
+- custom-row focus opens the editor only when text is empty; saved custom text reopens only through `main.editCustomAnswer` (default `c`), gated and hinted by the focused saved custom row
+- saving custom input returns to navigation on the same question with the custom row focused; confirming saved text never overwrites it or reselects a deselected multi-select draft
+- editor input keeps `c` as text and preserves native completion
+- destructive type changes, dirty dismissal, review double presses, and settings reset keep independent confirmation state; no action can satisfy another guard
 - persisted ask settings are migrated to the current schema version in memory, validated, and normalized before use without rewriting the config file on load
-- config schema versions 1–5 migrate to version 6 in memory, preserving other settings and adding missing defaults while discarding the obsolete `answer` section; explicit saves write version 6
+- config schema versions 1–6 migrate to version 7 in memory, preserving existing bindings and other settings, adding missing `main.editCustomAnswer: ["c"]`, and discarding the obsolete `answer` section; explicit saves write version 7
 - payload capture persists `ask:payload` entries with source `tool` only; recovery lookup scans only the current branch, revalidates payloads, and ignores obsolete non-tool entries
 - interrupted-ask recovery selects only the newest unresolved `ask_user` call on the active branch, prefers its valid persisted payload, and validates original arguments as fallback
 - recovered forms open only for TUI `startup`, `resume`, and `fork` events; the flow stays detached from the lifecycle handler
 - recovered submit, elaborate, and cancel persist dismissal before the same call can reopen; submit/elaborate deliver a user message, while cancel sends no message to the agent
-- invalid persisted keymaps fall back to default keymaps for the current session without discarding valid behaviour or notification settings
+- invalid persisted keymaps, including collisions introduced by migration, fall back to the full default keymaps with a warning for the current session without discarding valid behaviour or notification settings/channels
 - invalid notification channels are skipped and fall back to the default bell channel if none are valid
 - ask settings behaviour and notification enabled changes attempt to persist immediately from the settings list; save failures revert the change and show an error; config reset is guarded by a short double-press confirmation
 - `presentSingleAsMulti` is applied at ask-flow creation; toggling it does not rewrite already-normalized questions in an open flow
