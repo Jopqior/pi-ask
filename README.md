@@ -3,7 +3,7 @@
 # @jopqior/pi-ask
 
 [![npm downloads](https://badgen.net/npm/dm/@jopqior/pi-ask)](https://www.npmjs.com/package/@jopqior/pi-ask)
-[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=2218ef1631a03e5bbea2fb7234dda267f89553d7)](https://github.com/Jopqior/pi-ask/commits/main)
+[![last commit](https://badgen.net/github/last-commit/Jopqior/pi-ask?v=aa2823c5f381ecf597663dc60cebd667f7d64ef4)](https://github.com/Jopqior/pi-ask/commits/main)
 [![stars](https://badgen.net/github/stars/Jopqior/pi-ask)](https://github.com/Jopqior/pi-ask/stargazers)
 
 > [!IMPORTANT]
@@ -215,7 +215,7 @@ This package also bundles the `ask-user` skill profile from `skills/ask-user/SKI
 
 You can still add your own agent instruction if you want to further reinforce usage.
 
-New tool and recovered results use `version: 2` with `answers[id].intent` (`answer` or `elaborate`), full question/option context, and all notes. Cancellation returns empty answers. `required` is no longer advertised in the model schema; legacy inputs accept and ignore it. Historical unversioned results retain their old read-only semantics; remote submissions remain on the legacy protocol for now. See [`docs/interface-upgrade.md`](docs/interface-upgrade.md) for compatibility boundaries.
+New tool and recovered results use `version: 2` with `answers[id].intent` (`answer` or `elaborate`), full question/option context, and all notes. Cancellation returns empty answers. `required` is no longer advertised in the model schema; legacy inputs accept and ignore it. Historical unversioned results retain their old read-only semantics; remote submissions remain on the legacy protocol for now. See [result compatibility](docs/contract.md#result-compatibility) for format detection and historical-record rules.
 
 Result text currently provides basic answer, intent, and note display. Complete contextual text, disambiguation, and model follow-up instructions are deferred to later tickets.
 
@@ -296,4 +296,4 @@ Docs stay intentionally small:
 - `docs/contract.md` — external behavior
 - `docs/architecture.md` — module boundaries and invariants
 - `docs/configuration.md` — settings and keymaps
-- `docs/interface-upgrade.md` — result v2 and legacy compatibility
+- `docs/remote-events.md` — remote protocol and bridge integration

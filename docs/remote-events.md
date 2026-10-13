@@ -38,7 +38,7 @@ Use `flowId` for submit/correlation. Use `questions[].id` and `questions[].optio
 
 Event envelopes and remote submissions remain version 1. Remote answers use the legacy global `mode` and legacy validation/serialization; they do not infer per-question intent. Remote v2 migration is deferred.
 
-A flow completed through the TUI instead produces result version 2, including when the flow was announced on these lifecycle channels. The event envelope's `version: 1` is independent of `result.version`. See [interface-upgrade.md](interface-upgrade.md) before consuming results.
+A flow completed through the TUI instead produces result version 2, including when the flow was announced on these lifecycle channels. The event envelope's `version: 1` is independent of `result.version`. See [result compatibility](contract.md#result-compatibility) before consuming results.
 
 ## Submit an answer
 

@@ -86,7 +86,7 @@ Normal tool and recovered TUI flows return this result in `details`, alongside `
 
 - `intent: "answer"` is an ordinary answer; `intent: "elaborate"` marks the selected content as tentative explanation context, not a final decision
 - intent is independent per question; notes, selections, editing, navigation, and type changes never infer or change it
-- version 2 has no global `mode`, `continuation`, or `elaboration` fields
+- result `version: 2` is independent of config `schemaVersion` and remote event versions; it has no global `mode`, `continuation`, or `elaboration` fields
 - successful TUI submission includes a valid answer for every question; only notes, only Elaborate, or a deselected custom draft cannot satisfy submission
 - `questions` retains every normalized prompt and the full declared option list, including descriptions, previews, and recommendation metadata, as explanation background
 - `answers` retains all question notes and all option notes, including notes on unselected options, for ordinary and tentative answers alike
@@ -104,7 +104,47 @@ Normal tool and recovered TUI flows return this result in `details`, alongside `
 
 Version 2 text currently shows basic answers, ordinary/tentative intent, and notes (including unselected-option notes). Complete contextual text, identity/source disambiguation, and model follow-up instructions are deferred to later tickets; the full structured context is already retained in `details`.
 
-Unversioned historical results remain read-only legacy results: their global `mode`, answers, notes, and unanswered states keep the old semantics. Never infer per-question intent from legacy mode or notes. Unknown versions or malformed results fall back safely rather than rendering as successful version 2 results. Remote submissions remain legacy until the remote upgrade ticket. See [`interface-upgrade.md`](interface-upgrade.md).
+### Output example
+
+One ordinary answer and one tentative answer, with a note on an unselected option:
+
+```json
+{
+  "version": 2,
+  "cancelled": false,
+  "questions": [
+    {
+      "id": "scope", "label": "Scope", "prompt": "Which scope?", "type": "single",
+      "options": [{ "value": "local", "label": "Local" }]
+    },
+    {
+      "id": "storage", "label": "Storage", "prompt": "Which storage?", "type": "single",
+      "options": [
+        { "value": "sqlite", "label": "SQLite", "description": "Embedded database" },
+        { "value": "postgres", "label": "PostgreSQL", "description": "Separate server" }
+      ]
+    }
+  ],
+  "answers": {
+    "scope": { "intent": "answer", "values": ["local"], "labels": ["Local"], "indices": [1] },
+    "storage": {
+      "intent": "elaborate", "values": ["sqlite"], "labels": ["SQLite"], "indices": [1],
+      "note": "Explain this choice before I decide.",
+      "optionNotes": { "postgres": "What would running a server involve?" }
+    }
+  }
+}
+```
+
+## Result compatibility
+
+`AskResultV2` identifies current results; `LegacyAskResult` identifies valid unversioned results. Check the discriminator before consuming persisted results: `version === 2` selects the current format; absence of `version` requires validation against the legacy shape. Unknown versions and malformed data use a safe invalid-result fallback, never the successful version 2 display.
+
+Unversioned historical results are read-only and displayed with a legacy header. Their global `mode`, optional `continuation`/`elaboration`, answers, notes, and unanswered states keep the old semantics. Legacy submit allows partial and note-only answers; legacy elaborate carries committed answers plus separate clarification context. Never infer per-question intent from legacy mode or notes, or retroactively apply version 2 submission/cancellation invariants to historical records.
+
+Remote submissions still use the legacy protocol and serializer, without guessing per-question intent. The [remote event contract](remote-events.md#protocol-compatibility) distinguishes event-envelope versions from result versions. Remote v2 migration and deletion of the v1-only implementation belong to [#22](https://github.com/Jopqior/pi-ask/issues/22).
+
+Config schema migration is separate; see [configuration.md](configuration.md#config-versions-and-migrations).
 
 ## Supported UX
 
