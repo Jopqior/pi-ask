@@ -1,4 +1,4 @@
 node_modules/
-.pi/npm/
+.pi/
 .DS_Store
 .zed/private.json
